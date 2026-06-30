@@ -1,0 +1,125 @@
+╔══════════════════════════════════════════════════════════════╗
+║                                                              ║
+║        🎯 DASHBOARD FLUXO DE CAIXA - COMECE AQUI 🎯         ║
+║                                                              ║
+║              Ville de Provence | v1.0 | 2026                ║
+║                                                              ║
+╚══════════════════════════════════════════════════════════════╝
+
+
+⚡ INÍCIO RÁPIDO (3 passos)
+═══════════════════════════════════════════════════════════════
+
+1. Baixe o PDF "Contas Pagas" do Sienge
+
+2. Clique-duplo em: FLUXO_COMPLETO.bat
+   ✓ Processa o PDF automaticamente
+   ✓ Gera os dados
+   ✓ Abre o dashboard no navegador
+
+3. Visualize os gráficos e baixe em Excel quando precisar
+
+
+📁 ARQUIVOS IMPORTANTES
+═══════════════════════════════════════════════════════════════
+
+Clique-duplos (faça isso):
+  → FLUXO_COMPLETO.bat ........... Executa tudo (PDF → Dashboard)
+  → INICIAR_DASHBOARD.bat ........ Abre o dashboard (dados já processados)
+
+Documentação (leia se tiver dúvidas):
+  → COMECE_AQUI.txt ............. Este arquivo
+  → GUIA_STREAMLIT.md ........... Instruções detalhadas
+  → README.md ................... Visão geral do projeto
+
+Pastas:
+  → output/ ..................... Arquivos gerados (CSV, Excel)
+  → relatorios/ ................. Coloque o PDF aqui (ou indique o caminho)
+
+
+🔄 FLUXO MENSAL
+═══════════════════════════════════════════════════════════════
+
+Todo mês, quando você receber o relatório do Sienge:
+
+┌─────────────────────────────────────────────────┐
+│ 1. Exporte "Contas Pagas" do Sienge (PDF)      │
+│    └─> Salve onde quiser                       │
+│                                                  │
+│ 2. Clique-duplo em: FLUXO_COMPLETO.bat         │
+│    └─> Selecione o caminho do PDF              │
+│    └─> Dashboard abre automaticamente           │
+│                                                  │
+│ 3. Visualize os gráficos no navegador          │
+│    └─> Tabelas, pizzas, barras, KPIs          │
+│                                                  │
+│ 4. (Opcional) Baixe em Excel                   │
+│    └─> Botão "📥 Baixar em Excel" no dashboard │
+└─────────────────────────────────────────────────┘
+
+
+🎨 O QUE VOCÊ VAI VER
+═══════════════════════════════════════════════════════════════
+
+ABA 1: FLUXO DE CAIXA
+  ├─ Tabela completa de despesas/receitas
+  ├─ Valores formatados em R$
+  └─ Botão para baixar em Excel
+
+ABA 2: ANÁLISE
+  ├─ 4 cartões (Total, Receitas, Despesas, Saldo)
+  ├─ Gráfico de pizza (distribuição por categoria)
+  ├─ Gráfico de barras (Top 5 maiores gastos)
+  └─ Tabela resumo por categoria
+
+
+❓ DÚVIDAS?
+═══════════════════════════════════════════════════════════════
+
+Erro ao abrir o PDF?
+  → Confirme que o caminho está correto
+  → Tente copiar o arquivo para a pasta "relatorios/"
+  → Rode novamente
+
+Dashboard não abre?
+  → Verifique se o navegador abrirá em http://localhost:8501
+  → Feche a aba do navegador e acesse manualmente o endereço
+
+Quer compartilhar com seu pai/irmão/financeiro?
+  → Leia "Deploy no Azure" em GUIA_STREAMLIT.md
+  → Você consegue hospedar na nuvem gratuitamente
+
+
+💡 DICAS
+═══════════════════════════════════════════════════════════════
+
+• O dashboard está sempre sincronizado com o CSV
+  → Rode o script novamente com um novo PDF
+  → O dashboard já mostra dados atualizados (sem reiniciar)
+
+• Filtros interativos na esquerda
+  → Selecione categorias específicas
+  → Os gráficos atualizam em tempo real
+
+• Gráficos são interativos
+  → Passe o mouse para ver valores exatos
+  → Clique para zoom/pan
+  → Clique no ícone de câmera para salvar como PNG
+
+
+🚀 PRÓXIMAS FASES (Futuro)
+═══════════════════════════════════════════════════════════════
+
+[  ] Integração automática com Sienge (sem PDF)
+[  ] Histórico de vários meses
+[  ] Comparação vs. orçado
+[  ] Alertas automáticos (quando gasto > X)
+[  ] App mobile (acessar pelo celular)
+
+
+═══════════════════════════════════════════════════════════════
+
+📊 Dashboard v1.0 | Streamlit | Python 3.13
+Última atualização: 2026-06-30
+
+Pronto para usar! Boa sorte! 🎯

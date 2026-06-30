@@ -1,0 +1,88 @@
+// Copie e cole estas medidas no Power BI Desktop (aba "Dados" > "Modelagem" > "Nova Medida")
+
+// MEDIDAS BÁSICAS
+================
+
+Total Valor =
+SUM('fc_dados'[Valor])
+
+Total em Moeda =
+FORMAT([Total Valor], "R$ #,##0.00")
+
+
+// DESPESAS
+==========
+
+Total Despesas =
+VAR negativos = CALCULATE([Total Valor], 'fc_dados'[Valor] < 0)
+RETURN ABS(negativos)
+
+Total Despesas Moeda =
+FORMAT([Total Despesas], "R$ #,##0.00")
+
+
+// RECEITAS (se houver)
+========================
+
+Total Receitas =
+VAR positivos = CALCULATE([Total Valor], 'fc_dados'[Valor] > 0)
+RETURN positivos
+
+Total Receitas Moeda =
+FORMAT([Total Receitas], "R$ #,##0.00")
+
+
+// SALDO
+========
+
+Saldo Liquido =
+[Total Receitas] + [Total Despesas]
+
+Saldo Liquido Moeda =
+FORMAT([Saldo Liquido], "R$ #,##0.00")
+
+
+// PERCENTUAIS (para gráficos de pizza)
+========================================
+
+% da Despesa Total =
+VAR despesa_categoria = [Total Despesas]
+VAR despesa_geral = CALCULATE([Total Despesas], ALL('fc_dados'[Categoria]))
+RETURN DIVIDE(despesa_categoria, despesa_geral, 0)
+
+% Moeda =
+FORMAT([% da Despesa Total], "0.0%")
+
+
+// RANKING (para Top 5)
+=======================
+
+Rank Despesa =
+RANKX(
+    ALLSELECTED('fc_dados'[DescricaoLinha]),
+    [Total Despesas],,
+    DESC
+)
+
+Top 5 =
+IF([Rank Despesa] <= 5, [Total Despesas], BLANK())
+
+
+// FILTROS AVANÇADOS
+====================
+
+Apenas Despesas =
+CALCULATE([Total Valor], 'fc_dados'[Valor] < 0)
+
+Apenas Receitas =
+CALCULATE([Total Valor], 'fc_dados'[Valor] > 0)
+
+Por Categoria =
+CALCULATE(
+    [Total Valor],
+    FILTERS('fc_dados'[Categoria])
+)
+
+// Para usar em um cartão, use:
+//   Maior Despesa = MAXX(VALUES('fc_dados'[DescricaoLinha]), ABS([Total Valor]))
+//   Categoria Com Mais Gasto = MAXX(VALUES('fc_dados'[Categoria]), ABS([Total Valor]))

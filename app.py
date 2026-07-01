@@ -10,6 +10,9 @@ from io import BytesIO
 import os
 from datetime import datetime
 
+# Arquivo de persistência para entrada manual
+ARQUIVO_MANUAL = "dados_manuais.csv"
+
 # Configuração da página
 st.set_page_config(
     page_title="Dashboard FC - Ville de Provence",
@@ -67,6 +70,42 @@ def carregar_csv(caminho):
     except Exception as e:
         st.error(f"Erro ao carregar CSV: {e}")
         return None
+
+
+def carregar_dados_manuais():
+    """Carrega dados manuais persistidos em arquivo."""
+    if os.path.exists(ARQUIVO_MANUAL):
+        try:
+            df = pd.read_csv(ARQUIVO_MANUAL)
+            df['Data'] = pd.to_datetime(df['Data'])
+            df['Valor'] = pd.to_numeric(df['Valor'], errors='coerce')
+            return df
+        except:
+            return pd.DataFrame()
+    return pd.DataFrame()
+
+
+def salvar_dados_manuais(df):
+    """Salva dados manuais em arquivo (persiste)."""
+    if df is not None and not df.empty:
+        df.to_csv(ARQUIVO_MANUAL, index=False)
+
+
+def adicionar_entrada_manual(data, descricao, valor, tipo):
+    """Adiciona uma entrada manual e persiste."""
+    df_manual = carregar_dados_manuais()
+
+    nova_entrada = pd.DataFrame({
+        'Data': [pd.Timestamp(data)],
+        'CentroCusto': ['9999'],
+        'Categoria': [tipo],
+        'DescricaoLinha': [descricao],
+        'Valor': [valor if tipo == 'Receita' else -abs(valor)]
+    })
+
+    df_manual = pd.concat([df_manual, nova_entrada], ignore_index=True)
+    salvar_dados_manuais(df_manual)
+    return df_manual
 
 
 def processar_dados(df):
@@ -200,17 +239,31 @@ with st.sidebar:
         submitted = st.form_submit_button("➕ Adicionar")
 
         if submitted and descricao_entrada and valor_entrada != 0:
-            # Criar nova linha temporária
-            nova_entrada = pd.DataFrame({
-                'Data': [pd.Timestamp(data_entrada)],
-                'CentroCusto': ['9999'],
-                'Categoria': [tipo_entrada],
-                'DescricaoLinha': [descricao_entrada],
-                'Valor': [valor_entrada if tipo_entrada == 'Receita' else -abs(valor_entrada)]
-            })
-            # Será consolidada com df_filtrado abaixo
-            st.session_state.entrada_manual = nova_entrada
-            st.success(f"✅ Entrada adicionada: {descricao_entrada}")
+            adicionar_entrada_manual(data_entrada, descricao_entrada, valor_entrada, tipo_entrada)
+            st.success(f"✅ {descricao_entrada} adicionado e salvo!")
+            st.rerun()
+
+    # Mostrar entradas manuais existentes
+    df_manual_atual = carregar_dados_manuais()
+    if not df_manual_atual.empty:
+        st.markdown("### 📝 Entradas Manuais Salvas")
+
+        for idx, row in df_manual_atual.iterrows():
+            col1, col2, col3, col4, col5 = st.columns([2, 2, 2, 1, 1])
+            with col1:
+                st.caption(row['Data'].strftime('%d/%m/%Y'))
+            with col2:
+                st.caption(row['DescricaoLinha'])
+            with col3:
+                st.caption(f"R$ {row['Valor']:,.2f}")
+            with col4:
+                st.caption(row['Categoria'])
+            with col5:
+                if st.button("🗑️", key=f"del_{idx}"):
+                    df_manual_atual = df_manual_atual.drop(idx)
+                    salvar_dados_manuais(df_manual_atual)
+                    st.success("Deletado!")
+                    st.rerun()
 
     st.markdown("---")
 
@@ -258,10 +311,12 @@ with st.sidebar:
 
             df_filtrado = df[df['Categoria'].isin(categoria_selecionada)] if categoria_selecionada else df
 
-            # Consolidar com entrada manual se existir
-            if 'entrada_manual' in st.session_state and st.session_state.entrada_manual is not None:
-                df_filtrado = pd.concat([df_filtrado, st.session_state.entrada_manual], ignore_index=True)
-                st.info("📝 Entrada manual consolidada aos dados")
+            # Consolidar com dados manuais persistidos
+            df_manual = carregar_dados_manuais()
+            if not df_manual.empty:
+                df_filtrado = pd.concat([df_filtrado, df_manual], ignore_index=True)
+                n_manual = len(df_manual)
+                st.info(f"📝 {n_manual} entrada(s) manual(is) consolidada(s)")
 
             # Processar dados
             dados = processar_dados(df_filtrado)

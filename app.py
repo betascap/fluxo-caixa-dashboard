@@ -124,12 +124,10 @@ def calcular_metricas_essenciais(df):
     caixa_atual = saldo
     runway = caixa_atual / max(burn_rate_mes, 0.01) if burn_rate_mes > 0 else 999
 
-    # Status de risco (apenas 2 estados: CRÍTICO em vermelho ou NORMAL em cinza)
+    # Status de risco (apenas para métrica, sem alerta visual)
     if runway < 2:
-        status = "⚠️ CRÍTICO"
         cor_status = CORES['risco']
     else:
-        status = "✓ NORMAL"
         cor_status = CORES['neutro']
 
     # Maior despesa
@@ -419,46 +417,49 @@ if df is not None and not df.empty:
         )
 
     with col6:
-        # Status card (apenas vermelho para crítico, cinza para normal)
-        bg_color = f"{metricas['cor_status']}15" if metricas['cor_status'] == CORES['risco'] else "#F3F4F6"
-        st.markdown(
-            f"<div style='text-align: center; padding: 20px; background: {bg_color}; border-left: 3px solid {metricas['cor_status']}; border-radius: 2px;'>"
-            f"<h3 style='color: {metricas['cor_status']}; margin: 0;'>{metricas['status']}</h3>"
-            f"</div>",
-            unsafe_allow_html=True
-        )
+        st.metric("Status", "Operacional" if cor_status == CORES['neutro'] else "Alerta", delta=None)
 
     st.markdown("---")
 
-    # ===== ANÁLISES EXECUTIVAS =====
-    col_esq, col_dir = st.columns(2)
+    # ===== ABAS: GRÁFICOS vs DETALHES =====
+    tab_graficos, tab_detalhes = st.tabs(["📊 Gráficos", "📋 Detalhes"])
 
-    with col_esq:
-        st.plotly_chart(criar_waterfall(df), use_container_width=True)
+    with tab_graficos:
+        # Waterfall + Pareto
+        col_esq, col_dir = st.columns(2)
 
-    with col_dir:
-        st.plotly_chart(criar_pareto(df), use_container_width=True)
+        with col_esq:
+            st.plotly_chart(criar_waterfall(df), use_container_width=True)
 
-    st.plotly_chart(criar_heatmap_sazonalidade(df), use_container_width=True)
+        with col_dir:
+            st.plotly_chart(criar_pareto(df), use_container_width=True)
 
-    # ===== VARIANCE ANALYSIS =====
-    st.markdown("## 📈 Variance Analysis")
-    df_var = criar_variance_analysis(df)
+        # Heatmap full width
+        st.plotly_chart(criar_heatmap_sazonalidade(df), use_container_width=True)
 
-    st.dataframe(
-        df_var.style.format({'Orçado': 'R$ {:,.0f}', 'Realizado': 'R$ {:,.0f}', 'Diferença': 'R$ {:,.0f}'}),
-        use_container_width=True,
-        hide_index=True
-    )
+    with tab_detalhes:
+        # Variance Analysis
+        st.markdown("### Variance Analysis (Realizado vs. Orçado)")
+        df_var = criar_variance_analysis(df)
 
-    # ===== TABELA DETALHE =====
-    st.markdown("## 📋 Fluxo de Caixa Mensal (Detalhe)")
-    tabela_mes = criar_tabela_por_mes(df)
+        st.dataframe(
+            df_var.style.format({'Orçado': 'R$ {:,.0f}', 'Realizado': 'R$ {:,.0f}', 'Diferença': 'R$ {:,.0f}'})
+            .set_properties(**{'background-color': '#F3F4F6', 'color': '#1F2937'}),
+            use_container_width=True,
+            hide_index=True
+        )
 
-    st.dataframe(
-        tabela_mes.style.format('R$ {:,.0f}'),
-        use_container_width=True
-    )
+        st.markdown("---")
+
+        # Fluxo de Caixa Mensal
+        st.markdown("### Fluxo de Caixa Mensal")
+        tabela_mes = criar_tabela_por_mes(df)
+
+        st.dataframe(
+            tabela_mes.style.format('R$ {:,.0f}')
+            .set_properties(**{'background-color': '#F3F4F6', 'color': '#1F2937'}),
+            use_container_width=True
+        )
 
 else:
     st.warning("⚠️ Carregue dados para começar")

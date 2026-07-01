@@ -1,144 +1,174 @@
 import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
+from datetime import datetime
+import json
+import os
 
 st.set_page_config(page_title="Fluxo de Caixa", layout="wide")
 st.markdown("# Fluxo de Caixa - Ville de Provence")
 
+# Arquivo de persistencia
+ARQUIVO_PERSISTENCIA = "fluxo_caixa_data.json"
+
+def carregar_dados_persistidos():
+    """Carrega dados salvos localmente"""
+    if os.path.exists(ARQUIVO_PERSISTENCIA):
+        with open(ARQUIVO_PERSISTENCIA, 'r') as f:
+            return json.load(f)
+    return {}
+
+def salvar_dados(dados):
+    """Salva dados localmente"""
+    with open(ARQUIVO_PERSISTENCIA, 'w') as f:
+        json.dump(dados, f)
+
+def obter_mes_atual():
+    """Retorna ano-mes atual (ex: 2026-07)"""
+    agora = datetime.now()
+    return f"{agora.year}-{agora.month:02d}"
+
+# Inicializar session state
+if 'dados_fc' not in st.session_state:
+    st.session_state.dados_fc = carregar_dados_persistidos()
+
+mes_atual = obter_mes_atual()
+
 with st.sidebar:
-    st.markdown("## Upload")
-    arquivo = st.file_uploader("CSV", type="csv")
+    st.markdown("## Upload CSV")
+    arquivo = st.file_uploader("Selecione o CSV", type="csv")
 
-if arquivo is not None:
-    df = pd.read_csv(arquivo)
-    df['Data'] = pd.to_datetime(df['Data'])
+    if arquivo is not None:
+        df = pd.read_csv(arquivo)
 
-    st.success(f"OK - {len(df)} registros")
+        if 'DescricaoLinha' in df.columns and 'Valor' in df.columns:
+            # Processar dados por linha
+            for idx, row in df.iterrows():
+                linha = row['DescricaoLinha']
+                valor = float(row['Valor'])
+
+                if linha not in st.session_state.dados_fc:
+                    st.session_state.dados_fc[linha] = {}
+
+                st.session_state.dados_fc[linha][mes_atual] = valor
+
+            salvar_dados(st.session_state.dados_fc)
+            st.success(f"Dados carregados para {mes_atual}")
+        else:
+            st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
+
+    st.markdown("---")
+    st.markdown("## Entrada Manual")
+
+    with st.form("form_entrada"):
+        descricao = st.text_input("Descricao da Linha")
+        mes_entrada = st.text_input("Mes (YYYY-MM)", value=mes_atual)
+        valor_entrada = st.number_input("Valor (R$)", value=0.0)
+
+        if st.form_submit_button("Adicionar"):
+            if descricao and valor_entrada != 0:
+                if descricao not in st.session_state.dados_fc:
+                    st.session_state.dados_fc[descricao] = {}
+
+                st.session_state.dados_fc[descricao][mes_entrada] = valor_entrada
+                salvar_dados(st.session_state.dados_fc)
+                st.success(f"Adicionado: {descricao} em {mes_entrada}")
+
+# Processar dados para mostrar
+if st.session_state.dados_fc:
+    st.info(f"Mes Atual: {mes_atual}")
 
     # Metricas
     col1, col2, col3, col4 = st.columns(4)
 
-    receitas = df[df['Valor'] > 0]['Valor'].sum()
-    despesas = abs(df[df['Valor'] < 0]['Valor'].sum())
+    receitas = sum([v for k, v in st.session_state.dados_fc.items()
+                   if v.get(mes_atual, 0) > 0 for v in [v.get(mes_atual, 0)]])
+    despesas = sum([abs(v) for k, v in st.session_state.dados_fc.items()
+                   if v.get(mes_atual, 0) < 0 for v in [v.get(mes_atual, 0)]])
     saldo = receitas - despesas
-    dias = (df['Data'].max() - df['Data'].min()).days + 1
-    burn = abs(saldo) / max(dias, 1) * 30
-    runway = saldo / max(burn, 0.01) if burn > 0 else 999
 
     col1.metric("Receitas", f"R$ {receitas:,.0f}")
     col2.metric("Despesas", f"R$ {despesas:,.0f}")
     col3.metric("Saldo", f"R$ {saldo:,.0f}")
-    col4.metric("Runway", f"{runway:.1f} meses")
+    col4.metric("Status", "OK")
 
     # Tabs
     tab_dados, tab_graficos = st.tabs(["Planilha", "Graficos"])
 
     with tab_dados:
-        st.markdown("### Tabela - Dados Brutos")
+        st.markdown("### Tabela - Fluxo de Caixa por Mes")
 
-        df_piv = df.copy()
-        df_piv['Mes'] = df_piv['Data'].dt.to_period('M')
+        # Criar DataFrame pivotado
+        dados_lista = []
+        for linha, valores_mes in st.session_state.dados_fc.items():
+            row = {"Linha": linha}
+            row.update(valores_mes)
+            dados_lista.append(row)
 
-        tabela = df_piv.pivot_table(
-            index='DescricaoLinha',
-            columns='Mes',
-            values='Valor',
-            aggfunc='sum',
-            fill_value=0
-        )
+        if dados_lista:
+            df_tabela = pd.DataFrame(dados_lista)
 
-        tabela['TOTAL'] = tabela.sum(axis=1)
+            # Ordena colunas por mes
+            cols_mes = sorted([col for col in df_tabela.columns if col != "Linha" and len(col) == 7])
+            df_tabela = df_tabela[["Linha"] + cols_mes]
 
-        st.dataframe(tabela.style.format('R$ {:,.0f}'), use_container_width=True)
+            st.dataframe(df_tabela.set_index("Linha").style.format('R$ {:,.0f}'), use_container_width=True)
 
     with tab_graficos:
-        # Evolucao de Custos no Tempo
-        st.markdown("### Evolucao de Custos - Tendencia Mensal")
+        st.markdown("### Evolucao de Custos - Tendencia por Mes")
 
-        df_evolucao = df[df['Valor'] < 0].copy()
-        df_evolucao['Mes'] = df_evolucao['Data'].dt.to_period('M')
-        df_evolucao['Valor_abs'] = abs(df_evolucao['Valor'])
+        # Gráfico de linha
+        meses_disponiveis = sorted(set(m for linha in st.session_state.dados_fc.values() for m in linha.keys()))
 
-        # Agregar por mes e categoria
-        custos_por_mes = df_evolucao.groupby(['Mes', 'Categoria'])['Valor_abs'].sum().reset_index()
-        custos_por_mes['Mes'] = custos_por_mes['Mes'].astype(str)
+        if meses_disponiveis:
+            fig_evolucao = go.Figure()
 
-        # Pegar as top 5 categorias
-        top_categorias = df_evolucao.groupby('Categoria')['Valor_abs'].sum().nlargest(5).index
+            # Top 5 linhas por valor no mes atual
+            top_linhas = sorted([(k, v.get(mes_atual, 0)) for k, v in st.session_state.dados_fc.items()],
+                               key=lambda x: abs(x[1]), reverse=True)[:5]
 
-        fig_evolucao = go.Figure()
+            for linha, _ in top_linhas:
+                valores = [st.session_state.dados_fc[linha].get(mes, 0) for mes in meses_disponiveis]
+                fig_evolucao.add_trace(go.Scatter(
+                    x=meses_disponiveis,
+                    y=valores,
+                    mode='lines+markers',
+                    name=linha[:20],
+                    line=dict(width=2),
+                ))
 
-        for cat in top_categorias:
-            dados_cat = custos_por_mes[custos_por_mes['Categoria'] == cat]
-            fig_evolucao.add_trace(go.Scatter(
-                x=dados_cat['Mes'],
-                y=dados_cat['Valor_abs'],
-                mode='lines+markers',
-                name=str(cat)[:20],
-                line=dict(width=2),
+            fig_evolucao.update_layout(
+                title='Custos Principais Mês a Mês',
+                xaxis_title='Mes',
+                yaxis_title='Valor (R$)',
+                height=400,
+                hovermode='x unified',
+            )
+
+            st.plotly_chart(fig_evolucao, use_container_width=True)
+
+        st.markdown("### Pareto - Top Despesas do Mes Atual")
+
+        despesas_linha = [(k, abs(v.get(mes_atual, 0))) for k, v in st.session_state.dados_fc.items()
+                         if v.get(mes_atual, 0) < 0]
+        despesas_linha = sorted(despesas_linha, key=lambda x: x[1], reverse=True)[:10]
+
+        if despesas_linha:
+            df_pareto = pd.DataFrame(despesas_linha, columns=["Linha", "Valor"])
+            df_pareto["Pct"] = (df_pareto["Valor"] / df_pareto["Valor"].sum() * 100).round(1)
+
+            fig_pareto = go.Figure()
+            fig_pareto.add_trace(go.Bar(
+                y=df_pareto["Linha"],
+                x=df_pareto["Valor"],
+                orientation='h',
+                marker=dict(color='#6B7280'),
+                text=df_pareto["Pct"].apply(lambda x: f"{x:.0f}%"),
+                textposition='outside',
             ))
 
-        fig_evolucao.update_layout(
-            title='Custos Principais Mês a Mês',
-            xaxis_title='Mes',
-            yaxis_title='Valor (R$)',
-            height=400,
-            margin=dict(l=0, r=0, t=30, b=0),
-            hovermode='x unified',
-        )
-
-        st.plotly_chart(fig_evolucao, use_container_width=True)
-
-        st.markdown("**Analise**: Veja qual categoria está crescendo, estagnando ou diminuindo. OBRA é normalmente a maior - se está crescendo muito, é sinal de alerta.")
-
-        # Pareto
-        st.markdown("### Pareto - Top Despesas")
-
-        despesas_df = df[df['Valor'] < 0].copy()
-        despesas_df['Valor_abs'] = abs(despesas_df['Valor'])
-
-        top10 = despesas_df.groupby('DescricaoLinha')['Valor_abs'].sum().nlargest(10).reset_index()
-        top10 = top10.sort_values('Valor_abs', ascending=True)
-        top10['Pct'] = (top10['Valor_abs'] / top10['Valor_abs'].sum() * 100).round(1)
-
-        fig_pareto = go.Figure()
-
-        fig_pareto.add_trace(go.Bar(
-            y=top10['DescricaoLinha'],
-            x=top10['Valor_abs'],
-            orientation='h',
-            marker=dict(color='#6B7280'),
-            text=top10['Pct'].apply(lambda x: f"{x:.0f}%"),
-            textposition='outside',
-        ))
-
-        fig_pareto.update_layout(height=400, margin=dict(l=150, r=0, t=0, b=0))
-        st.plotly_chart(fig_pareto, use_container_width=True)
-
-        # Heatmap
-        st.markdown("### Heatmap - Sazonalidade")
-
-        df_piv = df.copy()
-        df_piv['Mes'] = df_piv['Data'].dt.to_period('M')
-
-        tabela_heat = df_piv.pivot_table(
-            index='Categoria',
-            columns='Mes',
-            values='Valor',
-            aggfunc='sum',
-            fill_value=0
-        )
-
-        fig_heat = go.Figure(data=go.Heatmap(
-            z=tabela_heat.values,
-            x=[str(c) for c in tabela_heat.columns],
-            y=tabela_heat.index,
-            colorscale='Greys',
-        ))
-
-        fig_heat.update_layout(height=300, margin=dict(l=150, r=0, t=0, b=0))
-        st.plotly_chart(fig_heat, use_container_width=True)
-
+            fig_pareto.update_layout(height=400, margin=dict(l=150, r=0, t=0, b=0))
+            st.plotly_chart(fig_pareto, use_container_width=True)
 
 else:
-    st.info("Carregue um CSV")
+    st.info("Carregue um CSV ou adicione dados manualmente")

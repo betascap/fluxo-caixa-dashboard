@@ -83,6 +83,84 @@ def processar_pdf(arquivo_pdf):
     except Exception as e:
         return None, f"Erro ao ler PDF: {str(e)}"
 
+def mapear_categoria(descricao):
+    """Mapeia descrição do credor para categoria padrão"""
+    descricao_lower = descricao.lower()
+
+    # Dicionário de mapeamentos (palavras-chave → categoria)
+    mapeamentos = {
+        "Comissões S/ Venda (Equipe Interna)": [
+            "comiss", "vendedor", "corretagem", "intermediacao", "venda"
+        ],
+        "Outras Despesas (adm)": [
+            "tarifa", "banco", "ted", "pix", "transferencia", "taxa",
+            "manutencao c/c", "juros", "iof"
+        ],
+        "Marketing": [
+            "marketing", "publicidade", "anuncio", "amplifique", "vegas card",
+            "outdoor", "propaganda"
+        ],
+        "Stand de Venda - Manutenção": [
+            "stand", "venda", "bolo", "bolacha", "alimentacao", "gas",
+            "colorpress", "bebida", "alimento", "papelaria", "nipon"
+        ],
+        "Incorporação": [
+            "incorporacao", "tabeliao", "registro", "protesto", "escritura",
+            "cartorio"
+        ],
+        "OBRA - (revisão ABRIL/26)": [
+            "obra", "concreto", "construcao", "concrebase", "material",
+            "eletrica", "piratininga", "mexichem", "limpeza obra"
+        ],
+        "IPTU Estoque": [
+            "iptu", "imposto predial", "imovel estoque"
+        ],
+        "Impostos": [
+            "imposto", "irpj", "pis", "cofins", "icms", "pje",
+            "receita federal", "ministerio", "governo"
+        ],
+        "ITBI": [
+            "itbi", "imposto transmissao", "registro imobiliario"
+        ],
+        "Aluguel": [
+            "aluguel", "alugel", "locacao", "sala", "escritorio"
+        ],
+        "Comissões": [
+            "comiss", "corretagem", "intermediacao"
+        ],
+        "Energia": [
+            "energia", "luz", "eletricidade", "claro", "piratininga",
+            "cpfl", "eletropaulo"
+        ],
+        "Agua e Esgoto": [
+            "agua", "esgoto", "saae", "sabesp", "saneamento", "hidraulico"
+        ],
+        "Telefone": [
+            "telefone", "fone", "voi", "claro", "oi", "tim", "vivo",
+            "internet", "telefonica"
+        ],
+        "Manutencao": [
+            "manutencao", "manutencão", "reparo", "conserto", "servico",
+            "urbano desenvolvimento", "instalacao", "limpeza"
+        ],
+        "Limpeza": [
+            "limpeza", "lixo", "vassoura", "desinfeccao", "higiene"
+        ],
+        "Seguranca": [
+            "seguranca", "segurança", "vigilancia", "vigia", "monitoramento",
+            "arganet"
+        ],
+    }
+
+    # Tenta encontrar match
+    for categoria, palavras_chave in mapeamentos.items():
+        for palavra in palavras_chave:
+            if palavra in descricao_lower:
+                return categoria
+
+    # Se não encontrar, retorna a descrição original
+    return descricao
+
 def extrair_contas_pagas(arquivo_pdf):
     """Extrai contas pagas de PDF Sienge e retorna DataFrame com Categoria e Valor"""
     try:
@@ -141,8 +219,12 @@ def extrair_contas_pagas(arquivo_pdf):
                                     valor = float(valor_str)
                                     valor = -abs(valor)  # Negativo para despesa
 
+                                    # Mapeia para categoria automaticamente
+                                    categoria = mapear_categoria(credor)
+
                                     dados.append({
-                                        "Linha": credor,
+                                        "Linha": categoria,
+                                        "Descricao Original": credor,
                                         "Valor": valor
                                     })
                                 except:
@@ -150,7 +232,10 @@ def extrair_contas_pagas(arquivo_pdf):
 
         df = pd.DataFrame(dados)
         if len(df) > 0:
-            return df, None
+            # Agrupa por categoria (soma valores iguais)
+            df_agrupado = df.groupby("Linha")["Valor"].sum().reset_index()
+            df_agrupado.columns = ["Linha", "Valor"]
+            return df_agrupado, None
         else:
             return None, "Nenhum dado encontrado no PDF"
 

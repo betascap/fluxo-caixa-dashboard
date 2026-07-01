@@ -167,80 +167,82 @@ def extrair_contas_pagas(arquivo_pdf):
         dados = []
 
         with pdfplumber.open(arquivo_pdf) as pdf:
-            for page in pdf.pages:
-                tables = page.extract_tables()
+            if not pdf.pages:
+                return None, "PDF vazio ou corrupto"
 
-                if not tables:
-                    continue
-
-                centro_atual = None
-
-                for table in tables:
-                    if not table:
+            for page_num, page in enumerate(pdf.pages):
+                try:
+                    tables = page.extract_tables()
+                    if not tables:
                         continue
 
-                    # Procura pelo centro de custo
-                    if len(table) > 0:
-                        first_cell = str(table[0][0]) if table[0] else ""
-                        if "Centro de custo" in first_cell:
-                            centro_str = str(table[0][1]) if len(table[0]) > 1 else ""
-                            # Extrai apenas a parte descritiva
-                            if "-" in centro_str:
-                                centro_atual = centro_str.split("-", 1)[1].strip()
+                    for table in tables:
+                        if not table or len(table) < 3:
+                            continue
 
-                    # Processa linhas de dados
-                    if len(table) > 1 and table[1]:
-                        header = table[1]
-                        try:
-                            liquido_idx = header.index("Líquido") if "Líquido" in header else -1
-                        except:
-                            liquido_idx = -1
+                        # Procura o índice da coluna "Líquido"
+                        liquido_idx = -1
+                        for col_idx, header_cell in enumerate(table[1]):
+                            if header_cell and "Líquido" in str(header_cell):
+                                liquido_idx = col_idx
+                                break
 
-                        if liquido_idx >= 0:
-                            for row_idx in range(2, len(table)):
+                        if liquido_idx < 0:
+                            continue
+
+                        # Processa linhas de dados (começa em linha 2)
+                        for row_idx in range(2, len(table)):
+                            try:
                                 row = table[row_idx]
-                                if not row or not row[0]:
+                                if not row or len(row) == 0:
                                     continue
 
-                                credor = str(row[0]).strip()
+                                credor = str(row[0]).strip() if row[0] else ""
 
-                                # Pula observações e totais
-                                if "Obs " in credor or "Total" in credor or credor == "" or len(credor) < 2:
+                                # Validações
+                                if not credor or len(credor) < 2:
+                                    continue
+                                if "Obs " in credor or "Total" in credor or "Subtotal" in credor:
                                     continue
 
-                                # Limpa quebras de linha
-                                credor = credor.replace("\n", " ").replace("  ", " ")
+                                # Limpa quebras de linha e espaços
+                                credor = " ".join(credor.split())
 
                                 # Extrai valor
-                                valor_str = row[liquido_idx] if liquido_idx < len(row) else "0"
-                                valor_str = str(valor_str).replace("T", "").replace(",", ".").strip()
+                                if liquido_idx < len(row) and row[liquido_idx]:
+                                    valor_str = str(row[liquido_idx]).replace("T", "").replace(",", ".").strip()
+                                    try:
+                                        valor = float(valor_str)
+                                        if valor != 0:  # Só adiciona valores não-zero
+                                            valor = -abs(valor)
+                                            categoria = mapear_categoria(credor)
 
-                                try:
-                                    valor = float(valor_str)
-                                    valor = -abs(valor)  # Negativo para despesa
+                                            dados.append({
+                                                "Linha": categoria,
+                                                "Valor": valor
+                                            })
+                                    except ValueError:
+                                        pass
 
-                                    # Mapeia para categoria automaticamente
-                                    categoria = mapear_categoria(credor)
+                            except Exception as e:
+                                continue
 
-                                    dados.append({
-                                        "Linha": categoria,
-                                        "Descricao Original": credor,
-                                        "Valor": valor
-                                    })
-                                except:
-                                    pass
+                except Exception as e:
+                    continue
+
+        if not dados:
+            return None, "Nenhum dado encontrado no PDF"
 
         df = pd.DataFrame(dados)
         if len(df) > 0:
             # Agrupa por categoria (soma valores iguais)
-            df_agrupado = df.groupby("Linha")["Valor"].sum().reset_index()
-            df_agrupado.columns = ["Linha", "Valor"]
+            df_agrupado = df.groupby("Linha", as_index=False)["Valor"].sum()
             return df_agrupado, None
         else:
-            return None, "Nenhum dado encontrado no PDF"
+            return None, "Erro ao processar dados extraídos"
 
     except Exception as e:
-        return None, f"Erro ao extrair PDF: {str(e)}"
+        return None, f"Erro ao ler PDF: {str(e)}"
 
 # Inicializar session state
 if 'dados_fc' not in st.session_state:
@@ -284,27 +286,36 @@ with st.sidebar:
             arquivo_pdf = st.file_uploader("Selecione o PDF de Contas Pagas", type="pdf", key="upload_pdf_contas")
 
             if arquivo_pdf is not None:
-                df_extraido, erro = extrair_contas_pagas(arquivo_pdf)
+                try:
+                    with st.spinner("Extraindo dados do PDF..."):
+                        df_extraido, erro = extrair_contas_pagas(arquivo_pdf)
 
-                if erro:
-                    st.error(erro)
-                else:
-                    with st.expander("Preview dos Dados Extraídos"):
-                        st.dataframe(df_extraido.style.format({'Valor': 'R$ {:,.2f}'}), use_container_width=True)
+                    if erro:
+                        st.error(f"❌ {erro}")
+                    elif df_extraido is None or len(df_extraido) == 0:
+                        st.error("❌ Nenhum dado foi extraído do PDF")
+                    else:
+                        st.success(f"✅ {len(df_extraido)} categorias encontradas!")
 
-                    if st.button("Importar Contas Pagas para " + mes_atual, key="btn_importar_contas"):
-                        for idx, row in df_extraido.iterrows():
-                            linha = row['Linha']
-                            valor = float(row['Valor'])
+                        with st.expander("Preview dos Dados Extraídos"):
+                            st.dataframe(df_extraido.style.format({'Valor': 'R$ {:,.2f}'}), use_container_width=True)
 
-                            if linha not in st.session_state.dados_fc:
-                                st.session_state.dados_fc[linha] = {}
+                        if st.button("Importar Contas Pagas para " + mes_atual, key="btn_importar_contas"):
+                            for idx, row in df_extraido.iterrows():
+                                linha = row['Linha']
+                                valor = float(row['Valor'])
 
-                            st.session_state.dados_fc[linha][mes_atual] = valor
+                                if linha not in st.session_state.dados_fc:
+                                    st.session_state.dados_fc[linha] = {}
 
-                        salvar_dados(st.session_state.dados_fc)
-                        st.success(f"Contas pagas importadas para {mes_atual}!")
-                        st.rerun()
+                                st.session_state.dados_fc[linha][mes_atual] = valor
+
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"✅ Contas pagas importadas para {mes_atual}!")
+                            st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar PDF: {str(e)}")
 
     with tab_upload_historico:
         st.markdown("### Carregar Dados de Mes Anterior")

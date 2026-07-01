@@ -83,6 +83,80 @@ def processar_pdf(arquivo_pdf):
     except Exception as e:
         return None, f"Erro ao ler PDF: {str(e)}"
 
+def extrair_contas_pagas(arquivo_pdf):
+    """Extrai contas pagas de PDF Sienge e retorna DataFrame com Categoria e Valor"""
+    try:
+        dados = []
+
+        with pdfplumber.open(arquivo_pdf) as pdf:
+            for page in pdf.pages:
+                tables = page.extract_tables()
+
+                if not tables:
+                    continue
+
+                centro_atual = None
+
+                for table in tables:
+                    if not table:
+                        continue
+
+                    # Procura pelo centro de custo
+                    if len(table) > 0:
+                        first_cell = str(table[0][0]) if table[0] else ""
+                        if "Centro de custo" in first_cell:
+                            centro_str = str(table[0][1]) if len(table[0]) > 1 else ""
+                            # Extrai apenas a parte descritiva
+                            if "-" in centro_str:
+                                centro_atual = centro_str.split("-", 1)[1].strip()
+
+                    # Processa linhas de dados
+                    if len(table) > 1 and table[1]:
+                        header = table[1]
+                        try:
+                            liquido_idx = header.index("Líquido") if "Líquido" in header else -1
+                        except:
+                            liquido_idx = -1
+
+                        if liquido_idx >= 0:
+                            for row_idx in range(2, len(table)):
+                                row = table[row_idx]
+                                if not row or not row[0]:
+                                    continue
+
+                                credor = str(row[0]).strip()
+
+                                # Pula observações e totais
+                                if "Obs " in credor or "Total" in credor or credor == "" or len(credor) < 2:
+                                    continue
+
+                                # Limpa quebras de linha
+                                credor = credor.replace("\n", " ").replace("  ", " ")
+
+                                # Extrai valor
+                                valor_str = row[liquido_idx] if liquido_idx < len(row) else "0"
+                                valor_str = str(valor_str).replace("T", "").replace(",", ".").strip()
+
+                                try:
+                                    valor = float(valor_str)
+                                    valor = -abs(valor)  # Negativo para despesa
+
+                                    dados.append({
+                                        "Linha": credor,
+                                        "Valor": valor
+                                    })
+                                except:
+                                    pass
+
+        df = pd.DataFrame(dados)
+        if len(df) > 0:
+            return df, None
+        else:
+            return None, "Nenhum dado encontrado no PDF"
+
+    except Exception as e:
+        return None, f"Erro ao extrair PDF: {str(e)}"
+
 # Inicializar session state
 if 'dados_fc' not in st.session_state:
     st.session_state.dados_fc = carregar_dados_persistidos()
@@ -95,27 +169,57 @@ with st.sidebar:
     tab_upload_atual, tab_upload_historico = st.tabs(["Mes Atual", "Historico"])
 
     with tab_upload_atual:
-        st.markdown("### Carregar CSV (Mes Atual)")
-        arquivo = st.file_uploader("Selecione o CSV Sienge", type="csv", key="upload_csv_atual")
+        st.markdown("### Carregar Dados do Mes Atual")
 
-        if arquivo is not None:
-            df = pd.read_csv(arquivo)
+        tipo_arquivo = st.radio("Tipo de arquivo:", ["CSV Sienge", "PDF Contas Pagas"], horizontal=True, key="tipo_upload")
 
-            if 'DescricaoLinha' in df.columns and 'Valor' in df.columns:
-                # Processar dados por linha
-                for idx, row in df.iterrows():
-                    linha = row['DescricaoLinha']
-                    valor = float(row['Valor'])
+        if tipo_arquivo == "CSV Sienge":
+            arquivo = st.file_uploader("Selecione o CSV", type="csv", key="upload_csv_atual")
 
-                    if linha not in st.session_state.dados_fc:
-                        st.session_state.dados_fc[linha] = {}
+            if arquivo is not None:
+                df = pd.read_csv(arquivo)
 
-                    st.session_state.dados_fc[linha][mes_atual] = valor
+                if 'DescricaoLinha' in df.columns and 'Valor' in df.columns:
+                    # Processar dados por linha
+                    for idx, row in df.iterrows():
+                        linha = row['DescricaoLinha']
+                        valor = float(row['Valor'])
 
-                salvar_dados(st.session_state.dados_fc)
-                st.success(f"Dados carregados para {mes_atual}")
-            else:
-                st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
+                        if linha not in st.session_state.dados_fc:
+                            st.session_state.dados_fc[linha] = {}
+
+                        st.session_state.dados_fc[linha][mes_atual] = valor
+
+                    salvar_dados(st.session_state.dados_fc)
+                    st.success(f"Dados carregados para {mes_atual}")
+                else:
+                    st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
+
+        else:  # PDF Contas Pagas
+            arquivo_pdf = st.file_uploader("Selecione o PDF de Contas Pagas", type="pdf", key="upload_pdf_contas")
+
+            if arquivo_pdf is not None:
+                df_extraido, erro = extrair_contas_pagas(arquivo_pdf)
+
+                if erro:
+                    st.error(erro)
+                else:
+                    with st.expander("Preview dos Dados Extraídos"):
+                        st.dataframe(df_extraido.style.format({'Valor': 'R$ {:,.2f}'}), use_container_width=True)
+
+                    if st.button("Importar Contas Pagas para " + mes_atual, key="btn_importar_contas"):
+                        for idx, row in df_extraido.iterrows():
+                            linha = row['Linha']
+                            valor = float(row['Valor'])
+
+                            if linha not in st.session_state.dados_fc:
+                                st.session_state.dados_fc[linha] = {}
+
+                            st.session_state.dados_fc[linha][mes_atual] = valor
+
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success(f"Contas pagas importadas para {mes_atual}!")
+                        st.rerun()
 
     with tab_upload_historico:
         st.markdown("### Carregar Dados de Mes Anterior")

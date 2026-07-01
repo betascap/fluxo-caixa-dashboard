@@ -31,9 +31,27 @@ if arquivo is not None:
     col4.metric("Runway", f"{runway:.1f} meses")
 
     # Tabs
-    tab1, tab2 = st.tabs(["Graficos", "Detalhes"])
+    tab_dados, tab_graficos = st.tabs(["Planilha", "Graficos"])
 
-    with tab1:
+    with tab_dados:
+        st.markdown("### Tabela - Dados Brutos")
+
+        df_piv = df.copy()
+        df_piv['Mes'] = df_piv['Data'].dt.to_period('M')
+
+        tabela = df_piv.pivot_table(
+            index='DescricaoLinha',
+            columns='Mes',
+            values='Valor',
+            aggfunc='sum',
+            fill_value=0
+        )
+
+        tabela['TOTAL'] = tabela.sum(axis=1)
+
+        st.dataframe(tabela.style.format('R$ {:,.0f}'), use_container_width=True)
+
+    with tab_graficos:
         # Evolucao de Custos no Tempo
         st.markdown("### Evolucao de Custos - Tendencia Mensal")
 
@@ -121,23 +139,6 @@ if arquivo is not None:
         fig_heat.update_layout(height=300, margin=dict(l=150, r=0, t=0, b=0))
         st.plotly_chart(fig_heat, use_container_width=True)
 
-    with tab2:
-        st.markdown("### Tabela - Dados Brutos")
-
-        df_piv = df.copy()
-        df_piv['Mes'] = df_piv['Data'].dt.to_period('M')
-
-        tabela = df_piv.pivot_table(
-            index='DescricaoLinha',
-            columns='Mes',
-            values='Valor',
-            aggfunc='sum',
-            fill_value=0
-        )
-
-        tabela['TOTAL'] = tabela.sum(axis=1)
-
-        st.dataframe(tabela.style.format('R$ {:,.0f}'), use_container_width=True)
 
 else:
     st.info("Carregue um CSV")

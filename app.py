@@ -15,7 +15,7 @@ ARQUIVO_MANUAL = "dados_manuais.csv"
 ARQUIVO_ORCADO = "orcamento.csv"
 
 st.set_page_config(
-    page_title="Tesouraria Corporativa",
+    page_title="Fluxo de Caixa",
     page_icon="💰",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -335,7 +335,7 @@ def criar_variance_analysis(df, df_orcado=None):
 # ============================================================================
 
 # Header
-st.markdown("# 💰 Tesouraria Corporativa")
+st.markdown("# 💰 Fluxo de Caixa - Ville de Provence")
 st.markdown("---")
 
 # Sidebar: Upload e dados
@@ -371,10 +371,10 @@ with st.sidebar:
 # ============================================================================
 
 if df is not None and not df.empty:
-    # ===== EXECUTIVE SUMMARY (15 segundos) =====
+    # ===== RESUMO EXECUTIVO =====
     metricas = calcular_metricas_essenciais(df)
 
-    st.markdown("## 📊 Executive Summary")
+    st.markdown("## 📊 Resumo")
 
     col1, col2, col3, col4, col5, col6 = st.columns(6)
 

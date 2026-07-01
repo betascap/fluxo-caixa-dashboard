@@ -58,30 +58,74 @@ with st.sidebar:
             st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
 
     st.markdown("---")
-    st.markdown("## Entrada Manual")
+    st.markdown("## Entrada de Dados")
 
-    with st.form("form_entrada"):
-        descricao = st.text_input("Descricao da Linha")
-        mes_entrada = st.text_input("Mes (YYYY-MM)", value=mes_atual)
-        valor_entrada = st.number_input("Valor (R$)", value=0.0)
-        orcamento = st.number_input("Orcamento Mensal (R$)", value=0.0)
+    tab_nova, tab_historica = st.tabs(["Nova Entrada", "Dados Historicos"])
 
-        if st.form_submit_button("Adicionar"):
-            if descricao and valor_entrada != 0:
-                if descricao not in st.session_state.dados_fc:
-                    st.session_state.dados_fc[descricao] = {}
-                if "orcamento" not in st.session_state.dados_fc:
-                    st.session_state.dados_fc["orcamento"] = {}
+    with tab_nova:
+        with st.form("form_entrada_nova"):
+            descricao = st.text_input("Descricao da Linha")
+            mes_entrada = st.text_input("Mes (YYYY-MM)", value=mes_atual)
+            valor_entrada = st.number_input("Valor (R$)", value=0.0)
+            orcamento = st.number_input("Orcamento Mensal (R$)", value=0.0)
 
-                st.session_state.dados_fc[descricao][mes_entrada] = valor_entrada
+            if st.form_submit_button("Adicionar"):
+                if descricao and valor_entrada != 0:
+                    if descricao not in st.session_state.dados_fc:
+                        st.session_state.dados_fc[descricao] = {}
+                    if "orcamento" not in st.session_state.dados_fc:
+                        st.session_state.dados_fc["orcamento"] = {}
 
-                if orcamento > 0:
-                    if descricao not in st.session_state.dados_fc["orcamento"]:
-                        st.session_state.dados_fc["orcamento"][descricao] = {}
-                    st.session_state.dados_fc["orcamento"][descricao][mes_entrada] = orcamento
+                    st.session_state.dados_fc[descricao][mes_entrada] = valor_entrada
 
-                salvar_dados(st.session_state.dados_fc)
-                st.success(f"Adicionado: {descricao} em {mes_entrada}")
+                    if orcamento > 0:
+                        if descricao not in st.session_state.dados_fc["orcamento"]:
+                            st.session_state.dados_fc["orcamento"][descricao] = {}
+                        st.session_state.dados_fc["orcamento"][descricao][mes_entrada] = orcamento
+
+                    salvar_dados(st.session_state.dados_fc)
+                    st.success(f"Adicionado: {descricao} em {mes_entrada}")
+                else:
+                    st.error("Preencha descricao e valor")
+
+    with tab_historica:
+        st.markdown("### Editar Dados Historicos")
+
+        if st.session_state.dados_fc:
+            linhas_lista = sorted([k for k in st.session_state.dados_fc.keys() if k != "orcamento"])
+
+            coluna_linha, coluna_mes, coluna_valor = st.columns([2, 1, 1])
+
+            with coluna_linha:
+                linha_selecionada = st.selectbox("Selecione a Linha", linhas_lista, key="linha_edit")
+
+            if linha_selecionada:
+                meses_linha = sorted(st.session_state.dados_fc[linha_selecionada].keys())
+
+                with coluna_mes:
+                    mes_selecionado = st.selectbox("Mes", meses_linha, key="mes_edit")
+
+                with coluna_valor:
+                    valor_atual = st.session_state.dados_fc[linha_selecionada][mes_selecionado]
+                    novo_valor = st.number_input("Novo Valor", value=float(valor_atual), key="valor_edit")
+
+                col_salvar, col_deletar = st.columns(2)
+
+                with col_salvar:
+                    if st.button("Atualizar", key="btn_atualizar"):
+                        st.session_state.dados_fc[linha_selecionada][mes_selecionado] = novo_valor
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success(f"Atualizado: {linha_selecionada} em {mes_selecionado}")
+                        st.rerun()
+
+                with col_deletar:
+                    if st.button("Deletar", key="btn_deletar"):
+                        del st.session_state.dados_fc[linha_selecionada][mes_selecionado]
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success(f"Deletado: {linha_selecionada} em {mes_selecionado}")
+                        st.rerun()
+        else:
+            st.info("Nenhum dado para editar")
 
 # Processar dados para mostrar
 if st.session_state.dados_fc:
@@ -110,6 +154,8 @@ if st.session_state.dados_fc:
         # Criar DataFrame pivotado
         dados_lista = []
         for linha, valores_mes in st.session_state.dados_fc.items():
+            if linha == "orcamento":
+                continue
             row = {"Linha": linha}
             row.update(valores_mes)
             dados_lista.append(row)
@@ -122,6 +168,28 @@ if st.session_state.dados_fc:
             df_tabela = df_tabela[["Linha"] + cols_mes]
 
             st.dataframe(df_tabela.set_index("Linha").style.format('R$ {:,.0f}'), use_container_width=True)
+
+            st.markdown("---")
+            st.markdown("### Adicionar Mes Historico")
+
+            col_novo_mes, col_btn = st.columns([2, 1])
+
+            with col_novo_mes:
+                novo_mes = st.text_input("Novo Mes (YYYY-MM) - ex: 2026-06", key="novo_mes_historico")
+
+            with col_btn:
+                if st.button("Criar Mes", key="btn_novo_mes"):
+                    if novo_mes and len(novo_mes) == 7:
+                        # Cria entrada para todas as linhas existentes
+                        for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                            if novo_mes not in st.session_state.dados_fc[linha]:
+                                st.session_state.dados_fc[linha][novo_mes] = 0.0
+
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success(f"Coluna {novo_mes} criada para todas as linhas")
+                        st.rerun()
+                    else:
+                        st.error("Use formato YYYY-MM")
 
     with tab_graficos:
         st.markdown("### Evolucao de Custos - Tendencia por Mes")

@@ -23,41 +23,52 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===== PALETA JP MORGAN =====
+# ===== PALETA MINIMALISTA (Monocromático) =====
 CORES = {
-    'risco': '#D32F2F',        # Vermelho — risco, urgência
-    'atencao': '#F57C00',      # Laranja — atenção
-    'normal': '#1976D2',       # Azul — dados normais
-    'positivo': '#388E3C',     # Verde — melhoria, oportunidade
-    'neutro': '#616161',       # Cinza — fundo, neutro
-    'white': '#FFFFFF'
+    'risco': '#DC2626',        # Vermelho APENAS para alertas críticos
+    'neutro': '#6B7280',       # Cinza — dados normais, neutro
+    'background': '#F9FAFB',   # Branco muito suave
+    'texto': '#1F2937',        # Cinza escuro — texto
 }
 
-# ===== ESTILOS JP MORGAN =====
+# ===== ESTILOS MINIMALISTAS (Bloomberg Terminal) =====
 st.markdown("""
 <style>
-    /* Tipografia limpa */
-    body { font-family: 'Segoe UI', Arial, sans-serif; background-color: #F5F5F5; }
-    h1, h2, h3 { color: #1a1a1a; font-weight: 600; letter-spacing: -0.5px; }
-
-    /* Métrica Premium */
-    .metric-premium {
-        background: white;
-        border-left: 4px solid #1976D2;
-        padding: 16px;
-        border-radius: 4px;
-        box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+    /* Fundo limpo */
+    body {
+        font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, sans-serif;
+        background-color: #F9FAFB;
     }
 
-    .metric-risco { border-left-color: #D32F2F; }
-    .metric-atencao { border-left-color: #F57C00; }
-    .metric-ok { border-left-color: #388E3C; }
+    /* Tipografia */
+    h1, h2, h3 {
+        color: #1F2937;
+        font-weight: 600;
+        letter-spacing: -0.5px;
+    }
 
-    /* Grid limpo */
-    .stMetricValue { font-size: 28px; font-weight: 700; }
+    /* Métrica minimalista */
+    .stMetricValue {
+        font-size: 32px;
+        font-weight: 700;
+        color: #1F2937;
+    }
 
-    /* Remover decorações */
-    .stPlotlyChart { background: white; border-radius: 4px; }
+    .stMetricLabel {
+        color: #6B7280;
+        font-size: 13px;
+        font-weight: 500;
+    }
+
+    /* Gráficos: fundo branco puro */
+    .stPlotlyChart {
+        background: white;
+        border-radius: 2px;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+    }
+
+    /* Tabelas */
+    .dataframe { color: #1F2937; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -113,16 +124,13 @@ def calcular_metricas_essenciais(df):
     caixa_atual = saldo
     runway = caixa_atual / max(burn_rate_mes, 0.01) if burn_rate_mes > 0 else 999
 
-    # Status de risco
+    # Status de risco (apenas 2 estados: CRÍTICO em vermelho ou NORMAL em cinza)
     if runway < 2:
-        status = "🔴 CRÍTICO"
+        status = "⚠️ CRÍTICO"
         cor_status = CORES['risco']
-    elif runway < 3:
-        status = "🟡 ATENÇÃO"
-        cor_status = CORES['atencao']
     else:
-        status = "🟢 SAUDÁVEL"
-        cor_status = CORES['positivo']
+        status = "✓ NORMAL"
+        cor_status = CORES['neutro']
 
     # Maior despesa
     maior_despesa_linha = df[df['Valor'] < 0].nsmallest(1, 'Valor')
@@ -193,9 +201,9 @@ def criar_waterfall(df):
         x=nomes,
         y=valores,
         connector={'line': {'color': CORES['neutro']}},
-        increasing={'marker': {'color': CORES['positivo']}},
-        decreasing={'marker': {'color': CORES['risco']}},
-        totals={'marker': {'color': CORES['normal']}},
+        increasing={'marker': {'color': CORES['neutro']}},  # Receitas em cinza
+        decreasing={'marker': {'color': CORES['risco']}},   # Despesas em vermelho (alerta)
+        totals={'marker': {'color': '#111827'}},            # Total em preto
     ))
 
     fig.update_layout(
@@ -223,24 +231,24 @@ def criar_pareto(df):
 
     fig = go.Figure()
 
-    # Barras
+    # Barras em cinza
     fig.add_trace(go.Bar(
         y=top10['DescricaoLinha'],
         x=top10['Valor_abs'],
         orientation='h',
         name='Consumo',
-        marker=dict(color=CORES['risco']),
+        marker=dict(color=CORES['neutro']),
         text=top10['% do Total'].apply(lambda x: f"{x:.0f}%"),
         textposition='outside',
     ))
 
-    # Linha de % acumulada
+    # Linha de % acumulada em cinza escuro
     fig.add_trace(go.Scatter(
         y=top10['DescricaoLinha'],
         x=top10['% Acumulada'] * total_despesas / 100,
         mode='lines+markers',
         name='% Acumulada',
-        line=dict(color=CORES['normal'], width=2),
+        line=dict(color='#374151', width=2),
         marker=dict(size=8),
         yaxis='y',
         xaxis='x2',
@@ -285,7 +293,7 @@ def criar_heatmap_sazonalidade(df):
         z=tabela.values,
         x=[str(c) for c in tabela.columns],
         y=tabela.index,
-        colorscale='RdYlGn_r',
+        colorscale='Greys',  # Escala cinza — minimalista
         hovertemplate='<b>%{y}</b><br>%{x}<br>R$ %{z:,.0f}<extra></extra>',
     ))
 
@@ -411,7 +419,14 @@ if df is not None and not df.empty:
         )
 
     with col6:
-        st.markdown(f"<div style='text-align: center; padding: 20px; background: {metricas['cor_status']}22; border-left: 4px solid {metricas['cor_status']}; border-radius: 4px;'><h3 style='color: {metricas['cor_status']};'>{metricas['status']}</h3></div>", unsafe_allow_html=True)
+        # Status card (apenas vermelho para crítico, cinza para normal)
+        bg_color = f"{metricas['cor_status']}15" if metricas['cor_status'] == CORES['risco'] else "#F3F4F6"
+        st.markdown(
+            f"<div style='text-align: center; padding: 20px; background: {bg_color}; border-left: 3px solid {metricas['cor_status']}; border-radius: 2px;'>"
+            f"<h3 style='color: {metricas['cor_status']}; margin: 0;'>{metricas['status']}</h3>"
+            f"</div>",
+            unsafe_allow_html=True
+        )
 
     st.markdown("---")
 

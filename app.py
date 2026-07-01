@@ -34,34 +34,44 @@ if arquivo is not None:
     tab1, tab2 = st.tabs(["Graficos", "Detalhes"])
 
     with tab1:
-        # Waterfall
-        st.markdown("### Waterfall - Fluxo de Caixa")
+        # Evolucao de Custos no Tempo
+        st.markdown("### Evolucao de Custos - Tendencia Mensal")
 
-        receitas_val = df[df['Valor'] > 0]['Valor'].sum()
-        despesas_cat = df[df['Valor'] < 0].groupby('Categoria')['Valor'].sum().sort_values()
+        df_evolucao = df[df['Valor'] < 0].copy()
+        df_evolucao['Mes'] = df_evolucao['Data'].dt.to_period('M')
+        df_evolucao['Valor_abs'] = abs(df_evolucao['Valor'])
 
-        nomes = ['Inicial']
-        valores = [0]
+        # Agregar por mes e categoria
+        custos_por_mes = df_evolucao.groupby(['Mes', 'Categoria'])['Valor_abs'].sum().reset_index()
+        custos_por_mes['Mes'] = custos_por_mes['Mes'].astype(str)
 
-        nomes.append('Receitas')
-        valores.append(receitas_val)
+        # Pegar as top 5 categorias
+        top_categorias = df_evolucao.groupby('Categoria')['Valor_abs'].sum().nlargest(5).index
 
-        for cat, val in despesas_cat.items():
-            nomes.append(str(cat)[:20])
-            valores.append(val)
+        fig_evolucao = go.Figure()
 
-        nomes.append('Final')
-        valores.append(0)
+        for cat in top_categorias:
+            dados_cat = custos_por_mes[custos_por_mes['Categoria'] == cat]
+            fig_evolucao.add_trace(go.Scatter(
+                x=dados_cat['Mes'],
+                y=dados_cat['Valor_abs'],
+                mode='lines+markers',
+                name=str(cat)[:20],
+                line=dict(width=2),
+            ))
 
-        fig_waterfall = go.Figure(go.Waterfall(
-            x=nomes,
-            y=valores,
-            increasing=dict(marker=dict(color='#6B7280')),
-            decreasing=dict(marker=dict(color='#DC2626')),
-        ))
+        fig_evolucao.update_layout(
+            title='Custos Principais Mês a Mês',
+            xaxis_title='Mes',
+            yaxis_title='Valor (R$)',
+            height=400,
+            margin=dict(l=0, r=0, t=30, b=0),
+            hovermode='x unified',
+        )
 
-        fig_waterfall.update_layout(height=400, margin=dict(l=0, r=0, t=0, b=0))
-        st.plotly_chart(fig_waterfall, use_container_width=True)
+        st.plotly_chart(fig_evolucao, use_container_width=True)
+
+        st.markdown("**Analise**: Veja qual categoria está crescendo, estagnando ou diminuindo. OBRA é normalmente a maior - se está crescendo muito, é sinal de alerta.")
 
         # Pareto
         st.markdown("### Pareto - Top Despesas")

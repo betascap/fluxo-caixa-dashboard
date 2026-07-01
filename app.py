@@ -64,13 +64,22 @@ with st.sidebar:
         descricao = st.text_input("Descricao da Linha")
         mes_entrada = st.text_input("Mes (YYYY-MM)", value=mes_atual)
         valor_entrada = st.number_input("Valor (R$)", value=0.0)
+        orcamento = st.number_input("Orcamento Mensal (R$)", value=0.0)
 
         if st.form_submit_button("Adicionar"):
             if descricao and valor_entrada != 0:
                 if descricao not in st.session_state.dados_fc:
                     st.session_state.dados_fc[descricao] = {}
+                if "orcamento" not in st.session_state.dados_fc:
+                    st.session_state.dados_fc["orcamento"] = {}
 
                 st.session_state.dados_fc[descricao][mes_entrada] = valor_entrada
+
+                if orcamento > 0:
+                    if descricao not in st.session_state.dados_fc["orcamento"]:
+                        st.session_state.dados_fc["orcamento"][descricao] = {}
+                    st.session_state.dados_fc["orcamento"][descricao][mes_entrada] = orcamento
+
                 salvar_dados(st.session_state.dados_fc)
                 st.success(f"Adicionado: {descricao} em {mes_entrada}")
 
@@ -169,6 +178,88 @@ if st.session_state.dados_fc:
 
             fig_pareto.update_layout(height=400, margin=dict(l=150, r=0, t=0, b=0))
             st.plotly_chart(fig_pareto, use_container_width=True)
+
+        st.markdown("### Heatmap - Intensidade de Gastos por Mes")
+
+        if meses_disponiveis:
+            dados_heatmap = []
+            linhas_principais = sorted([k for k in st.session_state.dados_fc.keys() if k != "orcamento"],
+                                      key=lambda x: abs(st.session_state.dados_fc[x].get(mes_atual, 0)),
+                                      reverse=True)[:10]
+
+            for linha in linhas_principais:
+                valores = [st.session_state.dados_fc[linha].get(mes, 0) for mes in meses_disponiveis]
+                dados_heatmap.append(valores)
+
+            fig_heatmap = go.Figure(data=go.Heatmap(
+                z=dados_heatmap,
+                x=meses_disponiveis,
+                y=[l[:25] for l in linhas_principais],
+                colorscale='Greys',
+            ))
+
+            fig_heatmap.update_layout(height=300, margin=dict(l=150, r=0, t=0, b=0))
+            st.plotly_chart(fig_heatmap, use_container_width=True)
+
+        st.markdown("### Orcado vs Realizado - % de Uso")
+
+        if "orcamento" in st.session_state.dados_fc:
+            dados_orcamento = []
+
+            for linha, valores_mes in st.session_state.dados_fc.items():
+                if linha == "orcamento":
+                    continue
+
+                realizado = abs(valores_mes.get(mes_atual, 0))
+                orcado = abs(st.session_state.dados_fc["orcamento"].get(linha, {}).get(mes_atual, 0))
+
+                if orcado > 0:
+                    pct_uso = (realizado / orcado * 100)
+                    dados_orcamento.append({
+                        "Linha": linha,
+                        "Orcado": orcado,
+                        "Realizado": realizado,
+                        "% Uso": pct_uso,
+                        "Status": "OK" if pct_uso <= 100 else "Acima"
+                    })
+
+            if dados_orcamento:
+                df_orcamento = pd.DataFrame(dados_orcamento)
+                df_orcamento = df_orcamento.sort_values("Realizado", ascending=True)
+
+                fig_orcamento = go.Figure()
+
+                fig_orcamento.add_trace(go.Bar(
+                    y=df_orcamento["Linha"],
+                    x=df_orcamento["Orcado"],
+                    orientation='h',
+                    name='Orcado',
+                    marker=dict(color='#D1D5DB'),
+                ))
+
+                fig_orcamento.add_trace(go.Bar(
+                    y=df_orcamento["Linha"],
+                    x=df_orcamento["Realizado"],
+                    orientation='h',
+                    name='Realizado',
+                    marker=dict(color='#374151'),
+                ))
+
+                fig_orcamento.update_layout(
+                    barmode='overlay',
+                    height=400,
+                    margin=dict(l=150, r=0, t=0, b=0),
+                    hovermode='y unified'
+                )
+
+                st.plotly_chart(fig_orcamento, use_container_width=True)
+
+                st.markdown("**Resumo de Uso:**")
+                st.dataframe(df_orcamento[["Linha", "Orcado", "Realizado", "% Uso"]].style.format({
+                    "Orcado": "R$ {:,.0f}",
+                    "Realizado": "R$ {:,.0f}",
+                    "% Uso": "{:.1f}%"
+                }), use_container_width=True)
 
 else:
     st.info("Carregue um CSV ou adicione dados manualmente")

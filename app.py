@@ -98,12 +98,42 @@ def processar_dados(df):
     }
 
 
+def criar_tabela_pivotada(df):
+    """Cria tabela pivotada: Linhas = Categorias, Colunas = Meses."""
+    if df is None or df.empty:
+        return None
+
+    df_piv = df.copy()
+    df_piv['Mes'] = df_piv['Data'].dt.to_period('M')
+
+    # Pivotar
+    tabela = df_piv.pivot_table(
+        index='DescricaoLinha',
+        columns='Mes',
+        values='Valor',
+        aggfunc='sum',
+        fill_value=0
+    )
+
+    # Adicionar coluna TOTAL
+    tabela['TOTAL'] = tabela.sum(axis=1)
+    tabela = tabela.sort_values('TOTAL')
+
+    return tabela
+
+
 def exportar_excel(df, nome_arquivo="fluxo_caixa.xlsx"):
-    """Exporta dados em Excel."""
+    """Exporta dados em Excel com 3 abas."""
     output = BytesIO()
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        # Aba 1: Fluxo de Caixa
+        # Aba 1: Tabela Pivotada (Mês × Categoria)
+        tabela_piv = criar_tabela_pivotada(df)
+        if tabela_piv is not None:
+            tabela_piv_reset = tabela_piv.reset_index()
+            tabela_piv_reset.to_excel(writer, sheet_name='FC por Mês', index=False)
+
+        # Aba 2: Resumo por Linha
         df_export = df.groupby('DescricaoLinha').agg({
             'Valor': 'sum',
             'Categoria': 'first'
@@ -112,7 +142,7 @@ def exportar_excel(df, nome_arquivo="fluxo_caixa.xlsx"):
         df_export.columns = ['Descrição', 'Valor', 'Categoria']
         df_export.to_excel(writer, sheet_name='Fluxo de Caixa', index=False)
 
-        # Aba 2: Dados brutos
+        # Aba 3: Dados brutos
         df_bruto = df[['Data', 'CentroCusto', 'Categoria', 'DescricaoLinha', 'Valor']].copy()
         df_bruto.columns = ['Data', 'Centro de Custo', 'Categoria', 'Descrição', 'Valor']
         df_bruto.to_excel(writer, sheet_name='Dados Brutos', index=False)
@@ -153,6 +183,36 @@ st.markdown("---")
 
 with st.sidebar:
     st.markdown("## ⚙️ Configurações")
+
+    # ========== ENTRADA MANUAL ==========
+    st.markdown("### ➕ Entrada Manual de Dados")
+
+    with st.form("form_entrada"):
+        col1, col2 = st.columns(2)
+        with col1:
+            data_entrada = st.date_input("Data", value=pd.Timestamp.now())
+        with col2:
+            tipo_entrada = st.selectbox("Tipo", ["Despesa", "Receita", "Ajuste"])
+
+        descricao_entrada = st.text_input("Descrição")
+        valor_entrada = st.number_input("Valor (R$)", value=0.0, step=100.0)
+
+        submitted = st.form_submit_button("➕ Adicionar")
+
+        if submitted and descricao_entrada and valor_entrada != 0:
+            # Criar nova linha temporária
+            nova_entrada = pd.DataFrame({
+                'Data': [pd.Timestamp(data_entrada)],
+                'CentroCusto': ['9999'],
+                'Categoria': [tipo_entrada],
+                'DescricaoLinha': [descricao_entrada],
+                'Valor': [valor_entrada if tipo_entrada == 'Receita' else -abs(valor_entrada)]
+            })
+            # Será consolidada com df_filtrado abaixo
+            st.session_state.entrada_manual = nova_entrada
+            st.success(f"✅ Entrada adicionada: {descricao_entrada}")
+
+    st.markdown("---")
 
     # Selecionar arquivo
     st.markdown("### 📁 Dados")
@@ -198,6 +258,11 @@ with st.sidebar:
 
             df_filtrado = df[df['Categoria'].isin(categoria_selecionada)] if categoria_selecionada else df
 
+            # Consolidar com entrada manual se existir
+            if 'entrada_manual' in st.session_state and st.session_state.entrada_manual is not None:
+                df_filtrado = pd.concat([df_filtrado, st.session_state.entrada_manual], ignore_index=True)
+                st.info("📝 Entrada manual consolidada aos dados")
+
             # Processar dados
             dados = processar_dados(df_filtrado)
 
@@ -218,7 +283,7 @@ with st.sidebar:
 
 if dados is not None:
     # Tabs principais
-    tab1, tab2 = st.tabs(["📋 Fluxo de Caixa", "📈 Análise"])
+    tab1, tab2, tab3 = st.tabs(["📋 Fluxo de Caixa", "📈 Análise", "📅 FC por Mês"])
 
     # ====================================================================
     # ABA 1: FLUXO DE CAIXA
@@ -382,6 +447,44 @@ if dados is not None:
                 "Valor": st.column_config.TextColumn(width="medium"),
             }
         )
+
+    # ====================================================================
+    # ABA 3: FC POR MÊS (PIVOTADA)
+    # ====================================================================
+    with tab3:
+        st.markdown("### Fluxo de Caixa Mensal (Categoria × Mês)")
+
+        tabela_piv = criar_tabela_pivotada(df_filtrado)
+
+        if tabela_piv is not None:
+            # Converter para display format
+            df_display = tabela_piv.reset_index()
+
+            # Formatar valores como moeda
+            for col in df_display.columns[1:]:
+                df_display[col] = df_display[col].apply(lambda x: f"R$ {x:,.2f}" if pd.notna(x) else "R$ 0,00")
+
+            st.dataframe(
+                df_display,
+                use_container_width=True,
+                hide_index=True
+            )
+
+            st.markdown("---")
+
+            # Download da tabela pivotada
+            col1, col2 = st.columns([0.5, 0.5])
+            with col1:
+                excel_file = exportar_excel(df_filtrado)
+                st.download_button(
+                    label="📥 Baixar Completo em Excel",
+                    data=excel_file,
+                    file_name=f"fluxo_caixa_completo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True
+                )
+        else:
+            st.warning("Não há dados para exibir a tabela pivotada.")
 
 else:
     st.warning("⚠️ Nenhum arquivo carregado. Carregue um CSV na barra lateral para começar.")

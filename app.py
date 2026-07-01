@@ -269,10 +269,56 @@ if st.session_state.dados_fc:
             if cols_mes_ordenado:
                 df_tabela = df_tabela[["Linha"] + cols_mes_ordenado]
 
-                # Calcula total por linha
-                df_tabela["TOTAL"] = df_tabela[cols_mes_ordenado].sum(axis=1)
+                # Calcula receitas e despesas por mês
+                receitas_por_mes = {}
+                despesas_por_mes = {}
+                saldo_por_mes = {}
 
-                st.dataframe(df_tabela.set_index("Linha").style.format('R$ {:,.0f}'), use_container_width=True)
+                for mes in cols_mes_ordenado:
+                    receitas = df_tabela[df_tabela[mes] > 0][mes].sum()
+                    despesas = abs(df_tabela[df_tabela[mes] < 0][mes].sum())
+                    saldo = receitas - despesas
+
+                    receitas_por_mes[mes] = receitas
+                    despesas_por_mes[mes] = despesas
+                    saldo_por_mes[mes] = saldo
+
+                # Adiciona linhas de totais
+                df_display = df_tabela.copy()
+
+                # Linha de Receitas
+                receitas_row = {"Linha": "TOTAL RECEITAS"}
+                for mes in cols_mes_ordenado:
+                    receitas_row[mes] = receitas_por_mes[mes]
+                df_display = pd.concat([df_display, pd.DataFrame([receitas_row])], ignore_index=True)
+
+                # Linha de Despesas
+                despesas_row = {"Linha": "TOTAL DESPESAS"}
+                for mes in cols_mes_ordenado:
+                    despesas_row[mes] = -despesas_por_mes[mes]
+                df_display = pd.concat([df_display, pd.DataFrame([despesas_row])], ignore_index=True)
+
+                # Linha de Saldo Final
+                saldo_row = {"Linha": "SALDO FINAL"}
+                for mes in cols_mes_ordenado:
+                    saldo_row[mes] = saldo_por_mes[mes]
+                df_display = pd.concat([df_display, pd.DataFrame([saldo_row])], ignore_index=True)
+
+                # Formata para exibição
+                df_display = df_display[["Linha"] + cols_mes_ordenado]
+
+                # Cria styler com formatação
+                styler = df_display.set_index("Linha").style.format('R$ {:,.0f}')
+
+                # Destacar linhas de totais (últimas 3 linhas)
+                def highlight_totals(s):
+                    if s.name in ["TOTAL RECEITAS", "TOTAL DESPESAS", "SALDO FINAL"]:
+                        return ["background-color: #E5E7EB; font-weight: bold"] * len(s)
+                    return [""] * len(s)
+
+                styler = styler.apply(highlight_totals, axis=1)
+
+                st.dataframe(styler, use_container_width=True)
             else:
                 st.dataframe(df_tabela, use_container_width=True)
 

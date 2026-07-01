@@ -341,29 +341,20 @@ st.markdown("---")
 with st.sidebar:
     st.markdown("## ⚙️ Dados")
 
-    csv_padrao = os.path.join(os.path.dirname(__file__), "output", "fc_dados.csv")
-    if os.path.exists(csv_padrao):
-        usar_padrao = st.checkbox("Usar dados padrão", value=True)
-        caminho_csv = csv_padrao if usar_padrao else st.file_uploader("Selecione CSV", type="csv")
-    else:
-        caminho_csv = st.file_uploader("Selecione CSV", type="csv")
+    caminho_csv = st.file_uploader("Selecione o CSV do Sienge", type="csv")
 
-    df_sienge = None
+    df = None
     if caminho_csv is not None:
-        if isinstance(caminho_csv, str):
-            df_sienge = carregar_csv(caminho_csv)
-        else:
-            df_sienge = carregar_csv(caminho_csv.name)
+        df_sienge = carregar_csv(caminho_csv)
 
-    if df_sienge is not None:
-        df_manual = carregar_dados_manuais()
-        df = consolidar_dados(df_sienge, df_manual)
+        if df_sienge is not None:
+            df_manual = carregar_dados_manuais()
+            df = consolidar_dados(df_sienge, df_manual)
 
-        st.success(f"✅ {len(df)} transações carregadas")
-        st.caption(f"{df['Data'].min().strftime('%d/%m/%y')} a {df['Data'].max().strftime('%d/%m/%y')}")
+            st.success(f"✅ {len(df)} transações carregadas")
+            st.caption(f"{df['Data'].min().strftime('%d/%m/%y')} a {df['Data'].max().strftime('%d/%m/%y')}")
     else:
-        st.warning("Carregue um CSV")
-        df = None
+        st.info("👆 Carregue um arquivo CSV para começar")
 
 # ============================================================================
 # DASHBOARD PRINCIPAL

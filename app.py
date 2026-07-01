@@ -143,7 +143,6 @@ def calcular_metricas_essenciais(df):
         'burn_rate_dia': burn_rate_dia,
         'burn_rate_mes': burn_rate_mes,
         'runway': runway,
-        'status': status,
         'cor_status': cor_status,
         'maior_despesa': maior_despesa_texto,
     }
@@ -414,7 +413,8 @@ if df is not None and not df.empty:
         )
 
     with col6:
-        st.metric("Status", "Operacional" if cor_status == CORES['neutro'] else "Alerta", delta=None)
+        status_texto = "Operacional" if metricas['cor_status'] == CORES['neutro'] else "Alerta"
+        st.metric("Status", status_texto, delta=None)
 
     st.markdown("---")
 

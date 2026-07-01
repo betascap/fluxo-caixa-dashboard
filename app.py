@@ -585,27 +585,31 @@ if st.session_state.dados_fc:
     with tab_dados:
         st.markdown("### Tabela - Fluxo de Caixa por Mes")
 
-        # Gerenciar Meses - Botões acima da tabela
+        # Gerenciar Meses - Botões em expander
         meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
 
-        if meses_existentes:
-            st.markdown("**Deletar Colunas:** Clique no X para remover um período")
-            col_meses = st.columns(len(meses_existentes) + 1)
+        with st.expander("⚙️ Periodos", expanded=False):
+            if meses_existentes:
+                col_meses = st.columns(len(meses_existentes) + 1)
 
-            for idx, mes in enumerate(meses_existentes):
-                with col_meses[idx]:
-                    st.markdown(f"<div style='text-align: center;'><b>{mes}</b></div>", unsafe_allow_html=True)
-                    if st.button("✕", key=f"del_{mes}", help=f"Deletar {mes}"):
-                        for linha in list(st.session_state.dados_fc.keys()):
-                            if linha != "orcamento" and mes in st.session_state.dados_fc[linha]:
-                                del st.session_state.dados_fc[linha][mes]
-                        salvar_dados(st.session_state.dados_fc)
-                        st.success(f"✅ {mes} deletado!")
-                        st.rerun()
+                for idx, mes in enumerate(meses_existentes):
+                    with col_meses[idx]:
+                        st.markdown(f"<div style='text-align: center;'><b>{mes}</b></div>", unsafe_allow_html=True)
+                        if st.button("✕", key=f"del_{mes}", help=f"Deletar {mes}"):
+                            for linha in list(st.session_state.dados_fc.keys()):
+                                if linha != "orcamento" and mes in st.session_state.dados_fc[linha]:
+                                    del st.session_state.dados_fc[linha][mes]
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"✅ {mes} deletado!")
+                            st.rerun()
 
-            with col_meses[-1]:
-                st.markdown("<div style='text-align: center;'><b>Novo</b></div>", unsafe_allow_html=True)
-                if st.button("➕", key="btn_add_new_mes"):
+                with col_meses[-1]:
+                    st.markdown("<div style='text-align: center;'><b>Novo</b></div>", unsafe_allow_html=True)
+                    if st.button("➕", key="btn_add_new_mes"):
+                        st.session_state.show_novo_mes = True
+            else:
+                st.info("Nenhum período adicionado")
+                if st.button("➕ Criar Primeiro Periodo", key="btn_first_mes"):
                     st.session_state.show_novo_mes = True
 
             # Form para novo mês
@@ -632,8 +636,6 @@ if st.session_state.dados_fc:
                             st.rerun()
                         else:
                             st.error(f"⚠️ {mes_novo} já existe!")
-
-            st.markdown("---")
 
         # Criar DataFrame pivotado
         dados_lista = []

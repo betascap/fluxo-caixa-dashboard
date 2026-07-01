@@ -5,7 +5,7 @@ from datetime import datetime
 import json
 import os
 import re
-import random
+import pdfplumber
 
 st.set_page_config(page_title="Fluxo de Caixa", layout="wide")
 st.markdown("# Fluxo de Caixa - Ville de Provence")
@@ -67,27 +67,21 @@ def processar_planilha_historica(df):
 
     return df_filtrado, None
 
-def gerar_csv_teste(mes_referencia="2026-07"):
-    """Gera CSV de teste com dados aleatórios"""
-    linhas = [
-        "Aluguel",
-        "Comissões",
-        "Impostos",
-        "IPTU Estoque",
-        "Energia",
-        "Agua e Esgoto",
-        "Telefone",
-        "Manutencao",
-        "Limpeza",
-        "Seguranca"
-    ]
+def processar_pdf(arquivo_pdf):
+    """Extrai tabela de PDF e converte em DataFrame"""
+    try:
+        with pdfplumber.open(arquivo_pdf) as pdf:
+            primeira_pagina = pdf.pages[0]
+            tabela = primeira_pagina.extract_table()
 
-    dados = []
-    for linha in linhas:
-        valor = random.randint(-50000, -1000) if random.random() > 0.3 else random.randint(10000, 100000)
-        dados.append({"DescricaoLinha": linha, "Valor": valor})
-
-    return pd.DataFrame(dados)
+            if tabela:
+                # Converte para DataFrame
+                df = pd.DataFrame(tabela[1:], columns=tabela[0])
+                return df, None
+            else:
+                return None, "Nenhuma tabela encontrada no PDF"
+    except Exception as e:
+        return None, f"Erro ao ler PDF: {str(e)}"
 
 # Inicializar session state
 if 'dados_fc' not in st.session_state:
@@ -128,8 +122,8 @@ with st.sidebar:
         st.info("Formato esperado: Primeira coluna = Linha, colunas seguintes = Meses (YYYY-MM)")
 
         arquivo_historico = st.file_uploader(
-            "CSV ou Excel com dados históricos",
-            type=["csv", "xlsx", "xls"],
+            "CSV, Excel ou PDF com dados históricos",
+            type=["csv", "xlsx", "xls", "pdf"],
             key="upload_historico"
         )
 
@@ -138,10 +132,18 @@ with st.sidebar:
                 # Detecta tipo de arquivo
                 if arquivo_historico.name.endswith('.csv'):
                     df_hist = pd.read_csv(arquivo_historico)
+                elif arquivo_historico.name.endswith('.pdf'):
+                    df_hist, erro = processar_pdf(arquivo_historico)
+                    if erro:
+                        st.error(erro)
+                        df_hist = None
                 else:
                     df_hist = pd.read_excel(arquivo_historico)
 
-                df_processado, erro = processar_planilha_historica(df_hist)
+                if df_hist is not None:
+                    df_processado, erro = processar_planilha_historica(df_hist)
+                else:
+                    df_processado, erro = None, "Erro ao processar arquivo"
 
                 if erro:
                     st.error(erro)
@@ -282,26 +284,6 @@ with st.sidebar:
                 st.success("Todos os dados foram deletados!")
                 st.rerun()
 
-    st.markdown("---")
-    st.markdown("## CSV de Teste")
-
-    with st.expander("Gerar e Baixar CSV de Teste"):
-        st.info("Clique abaixo para gerar um CSV com dados aleatórios para testar")
-
-        df_teste = gerar_csv_teste(mes_atual)
-
-        csv_teste = df_teste.to_csv(index=False).encode('utf-8')
-
-        st.download_button(
-            label="Baixar CSV de Teste",
-            data=csv_teste,
-            file_name=f"teste_fc_{mes_atual}.csv",
-            mime="text/csv",
-            key="btn_download_teste"
-        )
-
-        st.markdown("**Preview dos dados:**")
-        st.dataframe(df_teste.style.format('R$ {:,.0f}', subset=['Valor']), use_container_width=True)
 
 # Processar dados para mostrar
 if st.session_state.dados_fc:
@@ -396,11 +378,11 @@ if st.session_state.dados_fc:
                 # Destacar linhas de totais (últimas 3 linhas)
                 def highlight_totals(s):
                     if s.name in ["TOTAL RECEITAS", "TOTAL DESPESAS", "SALDO FINAL"]:
-                        return ["background-color: #E5E7EB; font-weight: bold; color: #000000"] * len(s)
+                        return ["background-color: #E5E7EB; font-weight: bold; color: #ffffff"] * len(s)
                     return [""] * len(s)
 
                 styler = styler.apply(highlight_totals, axis=1)
-                styler = styler.set_properties(**{'color': '#000000'})
+                styler = styler.set_properties(**{'color': '#ffffff'})
 
                 st.dataframe(styler, use_container_width=True)
             else:
@@ -564,7 +546,7 @@ if st.session_state.dados_fc:
                     "Orcado": "R$ {:,.0f}",
                     "Realizado": "R$ {:,.0f}",
                     "% Uso": "{:.1f}%"
-                }).set_properties(**{'color': '#000000'})
+                }).set_properties(**{'color': '#ffffff'})
                 st.dataframe(styler_orcamento, use_container_width=True)
 
 else:

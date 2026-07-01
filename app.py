@@ -332,27 +332,23 @@ with st.sidebar:
 
         st.markdown("---")
 
-        arquivo_historico = st.file_uploader(
-            "CSV, Excel ou PDF com os dados do mes",
-            type=["csv", "xlsx", "xls", "pdf"],
-            key="upload_historico",
-            help="Primeira coluna = Categoria, Segunda coluna = Valor"
-        )
+        tipo_arquivo_hist = st.radio("Tipo de arquivo:", ["CSV/Excel", "PDF Contas Pagas"], horizontal=True, key="tipo_upload_hist")
 
-        if arquivo_historico is not None:
-            try:
-                # Detecta tipo de arquivo
-                if arquivo_historico.name.endswith('.csv'):
-                    df_hist = pd.read_csv(arquivo_historico)
-                elif arquivo_historico.name.endswith('.pdf'):
-                    df_hist, erro = processar_pdf(arquivo_historico)
-                    if erro:
-                        st.error(erro)
-                        df_hist = None
-                else:
-                    df_hist = pd.read_excel(arquivo_historico)
+        if tipo_arquivo_hist == "CSV/Excel":
+            arquivo_historico = st.file_uploader(
+                "CSV ou Excel com os dados do mes",
+                type=["csv", "xlsx", "xls"],
+                key="upload_historico_csv"
+            )
 
-                if df_hist is not None:
+            if arquivo_historico is not None:
+                try:
+                    # Detecta tipo de arquivo
+                    if arquivo_historico.name.endswith('.csv'):
+                        df_hist = pd.read_csv(arquivo_historico)
+                    else:
+                        df_hist = pd.read_excel(arquivo_historico)
+
                     # Pega primeira coluna (categoria) e segunda coluna (valor)
                     primeira_col = df_hist.columns[0]
                     segunda_col = df_hist.columns[1] if len(df_hist.columns) > 1 else None
@@ -367,7 +363,7 @@ with st.sidebar:
                         with st.expander("Preview dos Dados"):
                             st.dataframe(df_hist.style.format({'Valor': 'R$ {:,.0f}'}), use_container_width=True)
 
-                        if st.button("Importar para " + mes_selecionado, key="btn_importar_mes"):
+                        if st.button("Importar para " + mes_selecionado, key="btn_importar_mes_csv"):
                             for idx, row in df_hist.iterrows():
                                 linha = str(row['Linha']).strip()
                                 valor = float(row['Valor'])
@@ -381,10 +377,49 @@ with st.sidebar:
                             st.success(f"Dados importados para {mes_selecionado}!")
                             st.rerun()
                     else:
-                        st.error("Arquivo precisa ter pelo menos 2 colunas (Categoria e Valor)")
+                        st.error("Arquivo precisa ter pelo menos 2 colunas")
 
-            except Exception as e:
-                st.error(f"Erro ao ler arquivo: {str(e)}")
+                except Exception as e:
+                    st.error(f"Erro ao ler arquivo: {str(e)}")
+
+        else:  # PDF Contas Pagas
+            arquivo_pdf_hist = st.file_uploader(
+                "PDF de Contas Pagas do mês",
+                type="pdf",
+                key="upload_historico_pdf"
+            )
+
+            if arquivo_pdf_hist is not None:
+                try:
+                    with st.spinner("Extraindo dados do PDF..."):
+                        df_extraido_hist, erro_hist = extrair_contas_pagas(arquivo_pdf_hist)
+
+                    if erro_hist:
+                        st.error(f"❌ {erro_hist}")
+                    elif df_extraido_hist is None or len(df_extraido_hist) == 0:
+                        st.error("❌ Nenhum dado foi extraído do PDF")
+                    else:
+                        st.success(f"✅ {len(df_extraido_hist)} categorias encontradas!")
+
+                        with st.expander("Preview dos Dados Extraídos"):
+                            st.dataframe(df_extraido_hist.style.format({'Valor': 'R$ {:,.2f}'}), use_container_width=True)
+
+                        if st.button("Importar Contas Pagas para " + mes_selecionado, key="btn_importar_contas_hist"):
+                            for idx, row in df_extraido_hist.iterrows():
+                                linha = row['Linha']
+                                valor = float(row['Valor'])
+
+                                if linha not in st.session_state.dados_fc:
+                                    st.session_state.dados_fc[linha] = {}
+
+                                st.session_state.dados_fc[linha][mes_selecionado] = valor
+
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"✅ Contas pagas importadas para {mes_selecionado}!")
+                            st.rerun()
+
+                except Exception as e:
+                    st.error(f"❌ Erro ao processar PDF: {str(e)}")
 
     st.markdown("---")
     st.markdown("## Entrada de Dados")

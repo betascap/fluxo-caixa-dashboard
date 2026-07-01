@@ -557,8 +557,6 @@ with st.sidebar:
 
 # Processar dados para mostrar
 if st.session_state.dados_fc:
-    st.info(f"Mes Atual: {mes_atual}")
-
     # Metricas
     col1, col2, col3, col4 = st.columns(4)
 

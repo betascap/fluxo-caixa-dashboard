@@ -579,63 +579,57 @@ if st.session_state.dados_fc:
         with st.expander("⚙️ Gerenciar Periodos", expanded=False):
             meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
 
+            st.markdown("**Periodos Existentes:**")
+
             if meses_existentes:
-                col_meses = st.columns(len(meses_existentes) + 1)
+                # Mostra cada mês em um card
+                for mes in meses_existentes:
+                    col_mes_nome, col_mes_btn = st.columns([3, 1])
 
-                for idx, mes in enumerate(meses_existentes):
-                    with col_meses[idx]:
-                        col1, col2 = st.columns([3, 1])
-                        with col1:
-                            st.markdown(f"**{mes}**")
-                        with col2:
-                            if st.button("X", key=f"btn_del_{mes}", help="Remover mês"):
-                                for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
-                                    if mes in st.session_state.dados_fc[linha]:
-                                        del st.session_state.dados_fc[linha][mes]
-                                salvar_dados(st.session_state.dados_fc)
-                                st.rerun()
+                    with col_mes_nome:
+                        st.markdown(f"### {mes}")
 
-                with col_meses[-1]:
-                    if st.button("➕ Adicionar", key="btn_add_mes"):
-                        st.session_state.modal_novo_mes = True
+                    with col_mes_btn:
+                        if st.button("🗑️ Deletar", key=f"btn_del_{mes}"):
+                            # Deleta o mês de todas as linhas
+                            for linha in list(st.session_state.dados_fc.keys()):
+                                if linha != "orcamento" and mes in st.session_state.dados_fc[linha]:
+                                    del st.session_state.dados_fc[linha][mes]
 
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"✅ Período {mes} deletado!")
+                            st.rerun()
             else:
                 st.info("Nenhum mês adicionado ainda")
-                if st.button("➕ Adicionar Primeiro Mes", key="btn_add_primeiro"):
-                    st.session_state.modal_novo_mes = True
 
-            # Modal para adicionar novo mês
-            if st.session_state.get('modal_novo_mes'):
-                st.markdown("---")
+            st.markdown("---")
+            st.markdown("**Adicionar Novo Periodo:**")
 
-                col_mes, col_ano, col_btn = st.columns([1, 1, 2])
+            col_mes, col_ano, col_btn = st.columns([1, 1, 1.5])
 
-                with col_mes:
-                    novo_mes = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="novo_mes_select")
+            with col_mes:
+                novo_mes = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="novo_mes_select")
 
-                with col_ano:
-                    novo_ano = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="novo_ano_select")
+            with col_ano:
+                novo_ano = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="novo_ano_select")
 
-                with col_btn:
-                    col_ok, col_cancel = st.columns(2)
-                    with col_ok:
-                        if st.button("Criar", key="btn_criar_novo_mes"):
-                            mes_novo = f"{novo_ano}-{novo_mes:02d}"
+            with col_btn:
+                if st.button("➕ Criar", key="btn_criar_novo_mes"):
+                    mes_novo = f"{novo_ano}-{novo_mes:02d}"
 
-                            # Cria coluna para todas as linhas existentes
-                            for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                    # Verifica se já existe
+                    if mes_novo in meses_existentes:
+                        st.error(f"⚠️ Período {mes_novo} já existe!")
+                    else:
+                        # Cria coluna para todas as linhas existentes
+                        for linha in list(st.session_state.dados_fc.keys()):
+                            if linha != "orcamento":
                                 if mes_novo not in st.session_state.dados_fc[linha]:
                                     st.session_state.dados_fc[linha][mes_novo] = 0.0
 
-                            salvar_dados(st.session_state.dados_fc)
-                            st.session_state.modal_novo_mes = False
-                            st.success(f"Período {mes_novo} criado!")
-                            st.rerun()
-
-                    with col_cancel:
-                        if st.button("Cancelar", key="btn_cancel_novo_mes"):
-                            st.session_state.modal_novo_mes = False
-                            st.rerun()
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success(f"✅ Período {mes_novo} criado!")
+                        st.rerun()
 
         st.markdown("### Tabela - Fluxo de Caixa por Mes")
 

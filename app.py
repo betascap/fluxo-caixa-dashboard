@@ -4,6 +4,7 @@ import plotly.graph_objects as go
 from datetime import datetime
 import json
 import os
+import re
 
 st.set_page_config(page_title="Fluxo de Caixa", layout="wide")
 st.markdown("# Fluxo de Caixa - Ville de Provence")
@@ -28,6 +29,43 @@ def obter_mes_atual():
     agora = datetime.now()
     return f"{agora.year}-{agora.month:02d}"
 
+def detectar_colunas_mes(colunas):
+    """Detecta colunas que representam meses no formato YYYY-MM ou similar"""
+    meses_detectados = []
+    padrao = r'^\d{4}-\d{2}$'
+
+    for col in colunas:
+        col_str = str(col).strip()
+        if re.match(padrao, col_str):
+            meses_detectados.append(col_str)
+
+    return sorted(meses_detectados)
+
+def processar_planilha_historica(df):
+    """Processa planilha histórica com estrutura: Linha | 2026-01 | 2026-02 | ..."""
+    # Primeira coluna é identificador da linha
+    primeira_col = df.columns[0]
+    df = df.rename(columns={primeira_col: "Linha"})
+
+    # Detecta colunas de mês
+    meses = detectar_colunas_mes(df.columns)
+
+    if not meses:
+        return None, "Nenhuma coluna de mês detectada. Use formato YYYY-MM"
+
+    # Filtra apenas colunas de mês + Linha
+    df_filtrado = df[["Linha"] + meses].copy()
+
+    # Remove linhas vazias
+    df_filtrado = df_filtrado.dropna(subset=["Linha"])
+    df_filtrado["Linha"] = df_filtrado["Linha"].astype(str).str.strip()
+
+    # Converte valores para float
+    for mes in meses:
+        df_filtrado[mes] = pd.to_numeric(df_filtrado[mes], errors='coerce').fillna(0)
+
+    return df_filtrado, None
+
 # Inicializar session state
 if 'dados_fc' not in st.session_state:
     st.session_state.dados_fc = carregar_dados_persistidos()
@@ -35,27 +73,82 @@ if 'dados_fc' not in st.session_state:
 mes_atual = obter_mes_atual()
 
 with st.sidebar:
-    st.markdown("## Upload CSV")
-    arquivo = st.file_uploader("Selecione o CSV", type="csv")
+    st.markdown("## Upload de Dados")
 
-    if arquivo is not None:
-        df = pd.read_csv(arquivo)
+    tab_upload_atual, tab_upload_historico = st.tabs(["Mes Atual", "Historico"])
 
-        if 'DescricaoLinha' in df.columns and 'Valor' in df.columns:
-            # Processar dados por linha
-            for idx, row in df.iterrows():
-                linha = row['DescricaoLinha']
-                valor = float(row['Valor'])
+    with tab_upload_atual:
+        st.markdown("### Carregar CSV (Mes Atual)")
+        arquivo = st.file_uploader("Selecione o CSV Sienge", type="csv", key="upload_csv_atual")
 
-                if linha not in st.session_state.dados_fc:
-                    st.session_state.dados_fc[linha] = {}
+        if arquivo is not None:
+            df = pd.read_csv(arquivo)
 
-                st.session_state.dados_fc[linha][mes_atual] = valor
+            if 'DescricaoLinha' in df.columns and 'Valor' in df.columns:
+                # Processar dados por linha
+                for idx, row in df.iterrows():
+                    linha = row['DescricaoLinha']
+                    valor = float(row['Valor'])
 
-            salvar_dados(st.session_state.dados_fc)
-            st.success(f"Dados carregados para {mes_atual}")
-        else:
-            st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
+                    if linha not in st.session_state.dados_fc:
+                        st.session_state.dados_fc[linha] = {}
+
+                    st.session_state.dados_fc[linha][mes_atual] = valor
+
+                salvar_dados(st.session_state.dados_fc)
+                st.success(f"Dados carregados para {mes_atual}")
+            else:
+                st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
+
+    with tab_upload_historico:
+        st.markdown("### Carregar Planilha Historica")
+        st.info("Formato esperado: Primeira coluna = Linha, colunas seguintes = Meses (YYYY-MM)")
+
+        arquivo_historico = st.file_uploader(
+            "CSV ou Excel com dados históricos",
+            type=["csv", "xlsx", "xls"],
+            key="upload_historico"
+        )
+
+        if arquivo_historico is not None:
+            try:
+                # Detecta tipo de arquivo
+                if arquivo_historico.name.endswith('.csv'):
+                    df_hist = pd.read_csv(arquivo_historico)
+                else:
+                    df_hist = pd.read_excel(arquivo_historico)
+
+                df_processado, erro = processar_planilha_historica(df_hist)
+
+                if erro:
+                    st.error(erro)
+                else:
+                    st.success(f"Detectados meses: {', '.join([col for col in df_processado.columns if col != 'Linha'])}")
+
+                    if st.button("Importar Dados Historicos", key="btn_importar_historico"):
+                        # Importa dados para cada mês
+                        for idx, row in df_processado.iterrows():
+                            linha = row['Linha']
+
+                            if linha not in st.session_state.dados_fc:
+                                st.session_state.dados_fc[linha] = {}
+
+                            # Preenche todos os meses
+                            for mes in [col for col in df_processado.columns if col != 'Linha']:
+                                valor = float(row[mes])
+                                if valor != 0:  # Só adiciona valores não-zero
+                                    st.session_state.dados_fc[linha][mes] = valor
+
+                        salvar_dados(st.session_state.dados_fc)
+                        st.success("Dados históricos importados!")
+                        st.rerun()
+
+                    # Preview dos dados
+                    with st.expander("Preview dos Dados"):
+                        st.dataframe(df_processado.style.format('{:,.0f}', subset=[col for col in df_processado.columns if col != 'Linha']), use_container_width=True)
+
+            except Exception as e:
+                st.error(f"Erro ao ler arquivo: {str(e)}")
 
     st.markdown("---")
     st.markdown("## Entrada de Dados")
@@ -134,10 +227,16 @@ if st.session_state.dados_fc:
     # Metricas
     col1, col2, col3, col4 = st.columns(4)
 
-    receitas = sum([v for k, v in st.session_state.dados_fc.items()
-                   if v.get(mes_atual, 0) > 0 for v in [v.get(mes_atual, 0)]])
-    despesas = sum([abs(v) for k, v in st.session_state.dados_fc.items()
-                   if v.get(mes_atual, 0) < 0 for v in [v.get(mes_atual, 0)]])
+    receitas = 0
+    despesas = 0
+    for k, v in st.session_state.dados_fc.items():
+        if k != "orcamento":
+            valor = v.get(mes_atual, 0)
+            if valor > 0:
+                receitas += valor
+            else:
+                despesas += abs(valor)
+
     saldo = receitas - despesas
 
     col1.metric("Receitas", f"R$ {receitas:,.0f}")
@@ -163,11 +262,19 @@ if st.session_state.dados_fc:
         if dados_lista:
             df_tabela = pd.DataFrame(dados_lista)
 
-            # Ordena colunas por mes
-            cols_mes = sorted([col for col in df_tabela.columns if col != "Linha" and len(col) == 7])
-            df_tabela = df_tabela[["Linha"] + cols_mes]
+            # Ordena colunas por mes (YYYY-MM cronologicamente)
+            cols_mes = [col for col in df_tabela.columns if col != "Linha" and len(col) == 7 and re.match(r'^\d{4}-\d{2}$', col)]
+            cols_mes_ordenado = sorted(cols_mes)  # YYYY-MM ordena alfabeticamente também cronologicamente
 
-            st.dataframe(df_tabela.set_index("Linha").style.format('R$ {:,.0f}'), use_container_width=True)
+            if cols_mes_ordenado:
+                df_tabela = df_tabela[["Linha"] + cols_mes_ordenado]
+
+                # Calcula total por linha
+                df_tabela["TOTAL"] = df_tabela[cols_mes_ordenado].sum(axis=1)
+
+                st.dataframe(df_tabela.set_index("Linha").style.format('R$ {:,.0f}'), use_container_width=True)
+            else:
+                st.dataframe(df_tabela, use_container_width=True)
 
             st.markdown("---")
             st.markdown("### Adicionar Mes Historico")
@@ -195,7 +302,7 @@ if st.session_state.dados_fc:
         st.markdown("### Evolucao de Custos - Tendencia por Mes")
 
         # Gráfico de linha
-        meses_disponiveis = sorted(set(m for linha in st.session_state.dados_fc.values() for m in linha.keys()))
+        meses_disponiveis = sorted(set(m for k, linha in st.session_state.dados_fc.items() if k != "orcamento" for m in linha.keys()))
 
         if meses_disponiveis:
             fig_evolucao = go.Figure()

@@ -1,8 +1,6 @@
 """
-DASHBOARD DE TESOURARIA CORPORATIVA
-Padrão: JP Morgan | Goldman Sachs | McKinsey
-Objetivo: Decisões estratégicas em <30 segundos
-Designed for CFOs e Managing Directors
+Dashboard de Tesouraria Corporativa
+Análises executivas para decisão rápida
 """
 import streamlit as st
 import pandas as pd
@@ -23,15 +21,15 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# ===== PALETA MINIMALISTA (Monocromático) =====
+# ===== PALETA MINIMALISTA =====
 CORES = {
-    'risco': '#DC2626',        # Vermelho APENAS para alertas críticos
-    'neutro': '#6B7280',       # Cinza — dados normais, neutro
-    'background': '#F9FAFB',   # Branco muito suave
-    'texto': '#1F2937',        # Cinza escuro — texto
+    'risco': '#DC2626',        # Vermelho — apenas para alertas
+    'neutro': '#6B7280',       # Cinza — dados normais
+    'background': '#F9FAFB',   # Fundo claro
+    'texto': '#1F2937',        # Texto escuro
 }
 
-# ===== ESTILOS MINIMALISTAS (Bloomberg Terminal) =====
+# ===== ESTILOS MINIMALISTAS =====
 st.markdown("""
 <style>
     /* Fundo limpo */
@@ -338,7 +336,6 @@ def criar_variance_analysis(df, df_orcado=None):
 
 # Header
 st.markdown("# 💰 Tesouraria Corporativa")
-st.markdown("*Dashboard de Decisão Executiva | Padrão JP Morgan*")
 st.markdown("---")
 
 # Sidebar: Upload e dados
@@ -465,7 +462,3 @@ else:
     st.warning("⚠️ Carregue dados para começar")
 
 st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #999; font-size: 0.9rem;'>JP Morgan Investment Banking | Tesouraria Corporativa v2.0</div>",
-    unsafe_allow_html=True
-)

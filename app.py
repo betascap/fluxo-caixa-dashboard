@@ -5,6 +5,7 @@ from datetime import datetime
 import json
 import os
 import re
+import random
 
 st.set_page_config(page_title="Fluxo de Caixa", layout="wide")
 st.markdown("# Fluxo de Caixa - Ville de Provence")
@@ -65,6 +66,28 @@ def processar_planilha_historica(df):
         df_filtrado[mes] = pd.to_numeric(df_filtrado[mes], errors='coerce').fillna(0)
 
     return df_filtrado, None
+
+def gerar_csv_teste(mes_referencia="2026-07"):
+    """Gera CSV de teste com dados aleatórios"""
+    linhas = [
+        "Aluguel",
+        "Comissões",
+        "Impostos",
+        "IPTU Estoque",
+        "Energia",
+        "Agua e Esgoto",
+        "Telefone",
+        "Manutencao",
+        "Limpeza",
+        "Seguranca"
+    ]
+
+    dados = []
+    for linha in linhas:
+        valor = random.randint(-50000, -1000) if random.random() > 0.3 else random.randint(10000, 100000)
+        dados.append({"DescricaoLinha": linha, "Valor": valor})
+
+    return pd.DataFrame(dados)
 
 # Inicializar session state
 if 'dados_fc' not in st.session_state:
@@ -219,6 +242,66 @@ with st.sidebar:
                         st.rerun()
         else:
             st.info("Nenhum dado para editar")
+
+    st.markdown("---")
+    st.markdown("## Gerenciamento de Dados")
+
+    with st.expander("Limpar/Deletar Dados"):
+        st.warning("Use com cuidado - essas ações são irreversíveis!")
+
+        col_acao, col_btn = st.columns(2)
+
+        with col_acao:
+            acao = st.radio(
+                "Selecione a ação:",
+                ["Deletar dados de um mes", "Limpar TODOS os dados"],
+                key="acao_limpeza"
+            )
+
+        if acao == "Deletar dados de um mes":
+            meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
+
+            if meses_existentes:
+                mes_deletar = st.selectbox("Selecione o mes para deletar", meses_existentes, key="mes_deletar")
+
+                if st.button("Deletar Dados de " + mes_deletar, key="btn_deletar_mes"):
+                    for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                        if mes_deletar in st.session_state.dados_fc[linha]:
+                            del st.session_state.dados_fc[linha][mes_deletar]
+
+                    salvar_dados(st.session_state.dados_fc)
+                    st.success(f"Dados de {mes_deletar} deletados!")
+                    st.rerun()
+            else:
+                st.info("Nenhum mes para deletar")
+
+        else:
+            if st.button("DELETAR TODOS OS DADOS", key="btn_deletar_todos"):
+                st.session_state.dados_fc = {}
+                salvar_dados(st.session_state.dados_fc)
+                st.success("Todos os dados foram deletados!")
+                st.rerun()
+
+    st.markdown("---")
+    st.markdown("## CSV de Teste")
+
+    with st.expander("Gerar e Baixar CSV de Teste"):
+        st.info("Clique abaixo para gerar um CSV com dados aleatórios para testar")
+
+        df_teste = gerar_csv_teste(mes_atual)
+
+        csv_teste = df_teste.to_csv(index=False).encode('utf-8')
+
+        st.download_button(
+            label="Baixar CSV de Teste",
+            data=csv_teste,
+            file_name=f"teste_fc_{mes_atual}.csv",
+            mime="text/csv",
+            key="btn_download_teste"
+        )
+
+        st.markdown("**Preview dos dados:**")
+        st.dataframe(df_teste.style.format('R$ {:,.0f}', subset=['Valor']), use_container_width=True)
 
 # Processar dados para mostrar
 if st.session_state.dados_fc:

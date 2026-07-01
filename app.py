@@ -118,13 +118,25 @@ with st.sidebar:
                 st.error("CSV deve ter colunas 'DescricaoLinha' e 'Valor'")
 
     with tab_upload_historico:
-        st.markdown("### Carregar Planilha Historica")
-        st.info("Formato esperado: Primeira coluna = Linha, colunas seguintes = Meses (YYYY-MM)")
+        st.markdown("### Carregar Dados de Mes Anterior")
+
+        # Seletor de mês primeiro
+        col_mes, col_ano = st.columns(2)
+        with col_mes:
+            mes_historico = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="mes_historico")
+        with col_ano:
+            ano_historico = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="ano_historico")
+
+        mes_selecionado = f"{ano_historico}-{mes_historico:02d}"
+        st.info(f"Dados serão importados para: **{mes_selecionado}**")
+
+        st.markdown("---")
 
         arquivo_historico = st.file_uploader(
-            "CSV, Excel ou PDF com dados históricos",
+            "CSV, Excel ou PDF com os dados do mes",
             type=["csv", "xlsx", "xls", "pdf"],
-            key="upload_historico"
+            key="upload_historico",
+            help="Primeira coluna = Categoria, Segunda coluna = Valor"
         )
 
         if arquivo_historico is not None:
@@ -141,36 +153,35 @@ with st.sidebar:
                     df_hist = pd.read_excel(arquivo_historico)
 
                 if df_hist is not None:
-                    df_processado, erro = processar_planilha_historica(df_hist)
-                else:
-                    df_processado, erro = None, "Erro ao processar arquivo"
+                    # Pega primeira coluna (categoria) e segunda coluna (valor)
+                    primeira_col = df_hist.columns[0]
+                    segunda_col = df_hist.columns[1] if len(df_hist.columns) > 1 else None
 
-                if erro:
-                    st.error(erro)
-                else:
-                    st.success(f"Detectados meses: {', '.join([col for col in df_processado.columns if col != 'Linha'])}")
+                    if segunda_col:
+                        df_hist = df_hist[[primeira_col, segunda_col]].rename(
+                            columns={primeira_col: "Linha", segunda_col: "Valor"}
+                        )
+                        df_hist["Valor"] = pd.to_numeric(df_hist["Valor"], errors='coerce')
+                        df_hist = df_hist.dropna(subset=["Valor"])
 
-                    if st.button("Importar Dados Historicos", key="btn_importar_historico"):
-                        # Importa dados para cada mês
-                        for idx, row in df_processado.iterrows():
-                            linha = row['Linha']
+                        with st.expander("Preview dos Dados"):
+                            st.dataframe(df_hist.style.format({'Valor': 'R$ {:,.0f}'}), use_container_width=True)
 
-                            if linha not in st.session_state.dados_fc:
-                                st.session_state.dados_fc[linha] = {}
+                        if st.button("Importar para " + mes_selecionado, key="btn_importar_mes"):
+                            for idx, row in df_hist.iterrows():
+                                linha = str(row['Linha']).strip()
+                                valor = float(row['Valor'])
 
-                            # Preenche todos os meses
-                            for mes in [col for col in df_processado.columns if col != 'Linha']:
-                                valor = float(row[mes])
-                                if valor != 0:  # Só adiciona valores não-zero
-                                    st.session_state.dados_fc[linha][mes] = valor
+                                if linha not in st.session_state.dados_fc:
+                                    st.session_state.dados_fc[linha] = {}
 
-                        salvar_dados(st.session_state.dados_fc)
-                        st.success("Dados históricos importados!")
-                        st.rerun()
+                                st.session_state.dados_fc[linha][mes_selecionado] = valor
 
-                    # Preview dos dados
-                    with st.expander("Preview dos Dados"):
-                        st.dataframe(df_processado.style.format('{:,.0f}', subset=[col for col in df_processado.columns if col != 'Linha']), use_container_width=True)
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"Dados importados para {mes_selecionado}!")
+                            st.rerun()
+                    else:
+                        st.error("Arquivo precisa ter pelo menos 2 colunas (Categoria e Valor)")
 
             except Exception as e:
                 st.error(f"Erro ao ler arquivo: {str(e)}")
@@ -378,11 +389,10 @@ if st.session_state.dados_fc:
                 # Destacar linhas de totais (últimas 3 linhas)
                 def highlight_totals(s):
                     if s.name in ["TOTAL RECEITAS", "TOTAL DESPESAS", "SALDO FINAL"]:
-                        return ["background-color: #E5E7EB; font-weight: bold; color: #ffffff"] * len(s)
+                        return ["background-color: #E5E7EB; font-weight: bold"] * len(s)
                     return [""] * len(s)
 
                 styler = styler.apply(highlight_totals, axis=1)
-                styler = styler.set_properties(**{'color': '#ffffff'})
 
                 st.dataframe(styler, use_container_width=True)
             else:
@@ -546,7 +556,7 @@ if st.session_state.dados_fc:
                     "Orcado": "R$ {:,.0f}",
                     "Realizado": "R$ {:,.0f}",
                     "% Uso": "{:.1f}%"
-                }).set_properties(**{'color': '#ffffff'})
+                })
                 st.dataframe(styler_orcamento, use_container_width=True)
 
 else:

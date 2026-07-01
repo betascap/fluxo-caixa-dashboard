@@ -486,7 +486,12 @@ with st.sidebar:
                     mes_selecionado = st.selectbox("Mes", meses_linha, key="mes_edit")
 
                 with coluna_valor:
-                    valor_atual = st.session_state.dados_fc[linha_selecionada][mes_selecionado]
+                    # Verifica se o valor existe antes de acessar
+                    if mes_selecionado in st.session_state.dados_fc.get(linha_selecionada, {}):
+                        valor_atual = st.session_state.dados_fc[linha_selecionada][mes_selecionado]
+                    else:
+                        valor_atual = 0
+
                     novo_valor = st.number_input("Novo Valor", value=float(valor_atual), key="valor_edit")
 
                 col_salvar, col_deletar = st.columns(2)
@@ -500,10 +505,13 @@ with st.sidebar:
 
                 with col_deletar:
                     if st.button("Deletar", key="btn_deletar"):
-                        del st.session_state.dados_fc[linha_selecionada][mes_selecionado]
-                        salvar_dados(st.session_state.dados_fc)
-                        st.success(f"Deletado: {linha_selecionada} em {mes_selecionado}")
-                        st.rerun()
+                        if mes_selecionado in st.session_state.dados_fc[linha_selecionada]:
+                            del st.session_state.dados_fc[linha_selecionada][mes_selecionado]
+                            salvar_dados(st.session_state.dados_fc)
+                            st.success(f"Deletado: {linha_selecionada} em {mes_selecionado}")
+                            st.rerun()
+                        else:
+                            st.error("Nada para deletar")
         else:
             st.info("Nenhum dado para editar")
 

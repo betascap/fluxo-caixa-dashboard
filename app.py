@@ -313,10 +313,11 @@ if st.session_state.dados_fc:
                 # Destacar linhas de totais (últimas 3 linhas)
                 def highlight_totals(s):
                     if s.name in ["TOTAL RECEITAS", "TOTAL DESPESAS", "SALDO FINAL"]:
-                        return ["background-color: #E5E7EB; font-weight: bold"] * len(s)
+                        return ["background-color: #E5E7EB; font-weight: bold; color: #000000"] * len(s)
                     return [""] * len(s)
 
                 styler = styler.apply(highlight_totals, axis=1)
+                styler = styler.set_properties(**{'color': '#000000'})
 
                 st.dataframe(styler, use_container_width=True)
             else:
@@ -476,11 +477,12 @@ if st.session_state.dados_fc:
                 st.plotly_chart(fig_orcamento, use_container_width=True)
 
                 st.markdown("**Resumo de Uso:**")
-                st.dataframe(df_orcamento[["Linha", "Orcado", "Realizado", "% Uso"]].style.format({
+                styler_orcamento = df_orcamento[["Linha", "Orcado", "Realizado", "% Uso"]].style.format({
                     "Orcado": "R$ {:,.0f}",
                     "Realizado": "R$ {:,.0f}",
                     "% Uso": "{:.1f}%"
-                }), use_container_width=True)
+                }).set_properties(**{'color': '#000000'})
+                st.dataframe(styler_orcamento, use_container_width=True)
 
 else:
     st.info("Carregue um CSV ou adicione dados manualmente")

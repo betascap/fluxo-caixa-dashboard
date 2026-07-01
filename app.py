@@ -692,13 +692,13 @@ if st.session_state.dados_fc:
                 # Formata para exibição
                 df_display = df_display[["Linha"] + cols_mes_ordenado]
 
-                # Cria styler com formatação
+                # Cria styler apenas com formatação de número (sem cores)
                 styler = df_display.set_index("Linha").style.format('R$ {:,.0f}')
 
-                # Destacar linhas de totais (últimas 3 linhas)
+                # Apenas negrito nas linhas de totais (sem background)
                 def highlight_totals(s):
                     if s.name in ["TOTAL RECEITAS", "TOTAL DESPESAS", "SALDO FINAL"]:
-                        return ["background-color: #E5E7EB; font-weight: bold"] * len(s)
+                        return ["font-weight: bold"] * len(s)
                     return [""] * len(s)
 
                 styler = styler.apply(highlight_totals, axis=1)

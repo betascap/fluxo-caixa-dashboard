@@ -325,70 +325,67 @@ if st.session_state.dados_fc:
 
     with tab_dados:
         # Gerenciar Meses
-        st.markdown("### Gerenciar Periodos")
+        with st.expander("⚙️ Gerenciar Periodos", expanded=False):
+            meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
 
-        meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
+            if meses_existentes:
+                col_meses = st.columns(len(meses_existentes) + 1)
 
-        if meses_existentes:
-            col_meses = st.columns(len(meses_existentes) + 1)
+                for idx, mes in enumerate(meses_existentes):
+                    with col_meses[idx]:
+                        col1, col2 = st.columns([3, 1])
+                        with col1:
+                            st.markdown(f"**{mes}**")
+                        with col2:
+                            if st.button("X", key=f"btn_del_{mes}", help="Remover mês"):
+                                for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                                    if mes in st.session_state.dados_fc[linha]:
+                                        del st.session_state.dados_fc[linha][mes]
+                                salvar_dados(st.session_state.dados_fc)
+                                st.rerun()
 
-            for idx, mes in enumerate(meses_existentes):
-                with col_meses[idx]:
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.markdown(f"**{mes}**")
-                    with col2:
-                        if st.button("X", key=f"btn_del_{mes}", help="Remover mês"):
-                            for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
-                                if mes in st.session_state.dados_fc[linha]:
-                                    del st.session_state.dados_fc[linha][mes]
-                            salvar_dados(st.session_state.dados_fc)
-                            st.rerun()
+                with col_meses[-1]:
+                    if st.button("➕ Adicionar", key="btn_add_mes"):
+                        st.session_state.modal_novo_mes = True
 
-            with col_meses[-1]:
-                if st.button("➕ Adicionar Mes", key="btn_add_mes"):
+            else:
+                st.info("Nenhum mês adicionado ainda")
+                if st.button("➕ Adicionar Primeiro Mes", key="btn_add_primeiro"):
                     st.session_state.modal_novo_mes = True
 
-        else:
-            st.info("Nenhum mês adicionado ainda")
-            if st.button("➕ Adicionar Primeiro Mes", key="btn_add_primeiro"):
-                st.session_state.modal_novo_mes = True
+            # Modal para adicionar novo mês
+            if st.session_state.get('modal_novo_mes'):
+                st.markdown("---")
 
-        # Modal para adicionar novo mês
-        if st.session_state.get('modal_novo_mes'):
-            st.markdown("---")
-            st.markdown("### Novo Periodo")
+                col_mes, col_ano, col_btn = st.columns([1, 1, 2])
 
-            col_mes, col_ano, col_btn = st.columns([1, 1, 2])
+                with col_mes:
+                    novo_mes = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="novo_mes_select")
 
-            with col_mes:
-                novo_mes = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="novo_mes_select")
+                with col_ano:
+                    novo_ano = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="novo_ano_select")
 
-            with col_ano:
-                novo_ano = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="novo_ano_select")
+                with col_btn:
+                    col_ok, col_cancel = st.columns(2)
+                    with col_ok:
+                        if st.button("Criar", key="btn_criar_novo_mes"):
+                            mes_novo = f"{novo_ano}-{novo_mes:02d}"
 
-            with col_btn:
-                col_ok, col_cancel = st.columns(2)
-                with col_ok:
-                    if st.button("Criar", key="btn_criar_novo_mes"):
-                        mes_novo = f"{novo_ano}-{novo_mes:02d}"
+                            # Cria coluna para todas as linhas existentes
+                            for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                                if mes_novo not in st.session_state.dados_fc[linha]:
+                                    st.session_state.dados_fc[linha][mes_novo] = 0.0
 
-                        # Cria coluna para todas as linhas existentes
-                        for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
-                            if mes_novo not in st.session_state.dados_fc[linha]:
-                                st.session_state.dados_fc[linha][mes_novo] = 0.0
+                            salvar_dados(st.session_state.dados_fc)
+                            st.session_state.modal_novo_mes = False
+                            st.success(f"Período {mes_novo} criado!")
+                            st.rerun()
 
-                        salvar_dados(st.session_state.dados_fc)
-                        st.session_state.modal_novo_mes = False
-                        st.success(f"Período {mes_novo} criado!")
-                        st.rerun()
+                    with col_cancel:
+                        if st.button("Cancelar", key="btn_cancel_novo_mes"):
+                            st.session_state.modal_novo_mes = False
+                            st.rerun()
 
-                with col_cancel:
-                    if st.button("Cancelar", key="btn_cancel_novo_mes"):
-                        st.session_state.modal_novo_mes = False
-                        st.rerun()
-
-        st.markdown("---")
         st.markdown("### Tabela - Fluxo de Caixa por Mes")
 
         # Criar DataFrame pivotado

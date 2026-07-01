@@ -324,6 +324,71 @@ if st.session_state.dados_fc:
     tab_dados, tab_graficos = st.tabs(["Planilha", "Graficos"])
 
     with tab_dados:
+        # Gerenciar Meses
+        st.markdown("### Gerenciar Periodos")
+
+        meses_existentes = sorted(set(m for k, v in st.session_state.dados_fc.items() if k != "orcamento" for m in v.keys()))
+
+        if meses_existentes:
+            col_meses = st.columns(len(meses_existentes) + 1)
+
+            for idx, mes in enumerate(meses_existentes):
+                with col_meses[idx]:
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.markdown(f"**{mes}**")
+                    with col2:
+                        if st.button("X", key=f"btn_del_{mes}", help="Remover mês"):
+                            for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                                if mes in st.session_state.dados_fc[linha]:
+                                    del st.session_state.dados_fc[linha][mes]
+                            salvar_dados(st.session_state.dados_fc)
+                            st.rerun()
+
+            with col_meses[-1]:
+                if st.button("➕ Adicionar Mes", key="btn_add_mes"):
+                    st.session_state.modal_novo_mes = True
+
+        else:
+            st.info("Nenhum mês adicionado ainda")
+            if st.button("➕ Adicionar Primeiro Mes", key="btn_add_primeiro"):
+                st.session_state.modal_novo_mes = True
+
+        # Modal para adicionar novo mês
+        if st.session_state.get('modal_novo_mes'):
+            st.markdown("---")
+            st.markdown("### Novo Periodo")
+
+            col_mes, col_ano, col_btn = st.columns([1, 1, 2])
+
+            with col_mes:
+                novo_mes = st.selectbox("Mes", range(1, 13), format_func=lambda x: f"{x:02d}", key="novo_mes_select")
+
+            with col_ano:
+                novo_ano = st.number_input("Ano", value=2026, min_value=2020, max_value=2030, key="novo_ano_select")
+
+            with col_btn:
+                col_ok, col_cancel = st.columns(2)
+                with col_ok:
+                    if st.button("Criar", key="btn_criar_novo_mes"):
+                        mes_novo = f"{novo_ano}-{novo_mes:02d}"
+
+                        # Cria coluna para todas as linhas existentes
+                        for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
+                            if mes_novo not in st.session_state.dados_fc[linha]:
+                                st.session_state.dados_fc[linha][mes_novo] = 0.0
+
+                        salvar_dados(st.session_state.dados_fc)
+                        st.session_state.modal_novo_mes = False
+                        st.success(f"Período {mes_novo} criado!")
+                        st.rerun()
+
+                with col_cancel:
+                    if st.button("Cancelar", key="btn_cancel_novo_mes"):
+                        st.session_state.modal_novo_mes = False
+                        st.rerun()
+
+        st.markdown("---")
         st.markdown("### Tabela - Fluxo de Caixa por Mes")
 
         # Criar DataFrame pivotado
@@ -398,27 +463,6 @@ if st.session_state.dados_fc:
             else:
                 st.dataframe(df_tabela, use_container_width=True)
 
-            st.markdown("---")
-            st.markdown("### Adicionar Mes Historico")
-
-            col_novo_mes, col_btn = st.columns([2, 1])
-
-            with col_novo_mes:
-                novo_mes = st.text_input("Novo Mes (YYYY-MM) - ex: 2026-06", key="novo_mes_historico")
-
-            with col_btn:
-                if st.button("Criar Mes", key="btn_novo_mes"):
-                    if novo_mes and len(novo_mes) == 7:
-                        # Cria entrada para todas as linhas existentes
-                        for linha in [k for k in st.session_state.dados_fc.keys() if k != "orcamento"]:
-                            if novo_mes not in st.session_state.dados_fc[linha]:
-                                st.session_state.dados_fc[linha][novo_mes] = 0.0
-
-                        salvar_dados(st.session_state.dados_fc)
-                        st.success(f"Coluna {novo_mes} criada para todas as linhas")
-                        st.rerun()
-                    else:
-                        st.error("Use formato YYYY-MM")
 
     with tab_graficos:
         st.markdown("### Evolucao de Custos - Tendencia por Mes")

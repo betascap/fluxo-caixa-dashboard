@@ -275,7 +275,11 @@ with st.sidebar:
                         if linha not in st.session_state.dados_fc:
                             st.session_state.dados_fc[linha] = {}
 
-                        st.session_state.dados_fc[linha][mes_atual] = valor
+                        # Acumula valor (permite múltiplas fontes)
+                        if mes_atual not in st.session_state.dados_fc[linha]:
+                            st.session_state.dados_fc[linha][mes_atual] = 0
+
+                        st.session_state.dados_fc[linha][mes_atual] += valor
 
                     salvar_dados(st.session_state.dados_fc)
                     st.success(f"Dados carregados para {mes_atual}")
@@ -308,7 +312,11 @@ with st.sidebar:
                                 if linha not in st.session_state.dados_fc:
                                     st.session_state.dados_fc[linha] = {}
 
-                                st.session_state.dados_fc[linha][mes_atual] = valor
+                                # Acumula valor (permite múltiplas fontes)
+                                if mes_atual not in st.session_state.dados_fc[linha]:
+                                    st.session_state.dados_fc[linha][mes_atual] = 0
+
+                                st.session_state.dados_fc[linha][mes_atual] += valor
 
                             salvar_dados(st.session_state.dados_fc)
                             st.success(f"✅ Contas pagas importadas para {mes_atual}!")
@@ -371,7 +379,11 @@ with st.sidebar:
                                 if linha not in st.session_state.dados_fc:
                                     st.session_state.dados_fc[linha] = {}
 
-                                st.session_state.dados_fc[linha][mes_selecionado] = valor
+                                # Acumula valor (permite múltiplas fontes)
+                                if mes_selecionado not in st.session_state.dados_fc[linha]:
+                                    st.session_state.dados_fc[linha][mes_selecionado] = 0
+
+                                st.session_state.dados_fc[linha][mes_selecionado] += valor
 
                             salvar_dados(st.session_state.dados_fc)
                             st.success(f"Dados importados para {mes_selecionado}!")
@@ -412,7 +424,11 @@ with st.sidebar:
                                 if linha not in st.session_state.dados_fc:
                                     st.session_state.dados_fc[linha] = {}
 
-                                st.session_state.dados_fc[linha][mes_selecionado] = valor
+                                # Acumula valor (permite múltiplas fontes)
+                                if mes_selecionado not in st.session_state.dados_fc[linha]:
+                                    st.session_state.dados_fc[linha][mes_selecionado] = 0
+
+                                st.session_state.dados_fc[linha][mes_selecionado] += valor
 
                             salvar_dados(st.session_state.dados_fc)
                             st.success(f"✅ Contas pagas importadas para {mes_selecionado}!")

@@ -6,6 +6,8 @@ import json
 import os
 import re
 import pdfplumber
+import requests
+from base64 import b64encode
 
 st.set_page_config(page_title="Fluxo de Caixa", layout="wide")
 st.markdown("# Fluxo de Caixa - Ville de Provence")
@@ -14,16 +16,84 @@ st.markdown("# Fluxo de Caixa - Ville de Provence")
 ARQUIVO_PERSISTENCIA = "fluxo_caixa_data.json"
 
 def carregar_dados_persistidos():
-    """Carrega dados salvos localmente"""
+    """Carrega dados do GitHub ou arquivo local"""
+    # Tenta carregar do GitHub primeiro (persistência na nuvem)
+    try:
+        github_token = st.secrets.get("github_token")
+        github_repo = st.secrets.get("github_repo", "betascap/fluxo-caixa-dados")
+        github_file = "dados_fc.json"
+
+        if github_token:
+            url = f"https://api.github.com/repos/{github_repo}/contents/{github_file}"
+            headers = {"Authorization": f"token {github_token}"}
+            response = requests.get(url, headers=headers)
+
+            if response.status_code == 200:
+                import base64
+                content = response.json()["content"]
+                dados = json.loads(base64.b64decode(content).decode())
+                return dados
+    except Exception as e:
+        pass
+
+    # Fallback: carrega do arquivo local
     if os.path.exists(ARQUIVO_PERSISTENCIA):
-        with open(ARQUIVO_PERSISTENCIA, 'r') as f:
-            return json.load(f)
+        try:
+            with open(ARQUIVO_PERSISTENCIA, 'r') as f:
+                return json.load(f)
+        except:
+            pass
+
     return {}
 
 def salvar_dados(dados):
-    """Salva dados localmente"""
-    with open(ARQUIVO_PERSISTENCIA, 'w') as f:
-        json.dump(dados, f)
+    """Salva dados em GitHub (persistência na nuvem) e arquivo local"""
+    # Salva local sempre
+    try:
+        with open(ARQUIVO_PERSISTENCIA, 'w') as f:
+            json.dump(dados, f)
+    except:
+        pass
+
+    # Tenta salvar no GitHub
+    try:
+        github_token = st.secrets.get("github_token")
+        github_repo = st.secrets.get("github_repo", "betascap/fluxo-caixa-dados")
+        github_file = "dados_fc.json"
+
+        if github_token:
+            url = f"https://api.github.com/repos/{github_repo}/contents/{github_file}"
+            headers = {
+                "Authorization": f"token {github_token}",
+                "Content-Type": "application/json"
+            }
+
+            # Lê arquivo atual para pegar SHA
+            get_response = requests.get(url, headers=headers)
+            sha = None
+            if get_response.status_code == 200:
+                sha = get_response.json()["sha"]
+
+            # Codifica dados em base64
+            content_encoded = b64encode(json.dumps(dados).encode()).decode()
+
+            # Prepara payload
+            payload = {
+                "message": f"Auto-backup: {datetime.now().isoformat()}",
+                "content": content_encoded,
+                "branch": "main"
+            }
+
+            if sha:
+                payload["sha"] = sha
+
+            # Faz PUT/POST
+            if sha:
+                requests.put(url, json=payload, headers=headers)
+            else:
+                requests.put(url, json=payload, headers=headers)
+    except Exception as e:
+        pass  # Silent fail - dados já foram salvos localmente
 
 def obter_mes_atual():
     """Retorna ano-mes atual (ex: 2026-07)"""
